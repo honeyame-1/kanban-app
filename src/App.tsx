@@ -6,6 +6,8 @@ import { StatusBar } from "./components/StatusBar";
 import { TaskModal } from "./components/TaskModal";
 import { ArchiveView } from "./components/ArchiveView";
 import { useTasks } from "./hooks/useTasks";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useTheme } from "./hooks/useTheme";
 import type { Task } from "./types";
 
 function App() {
@@ -28,6 +30,14 @@ function App() {
     taskStore.fetchArchivedTasks();
     setShowArchive(true);
   };
+
+  useKeyboardShortcuts({
+    onNewTask: handleNewTask,
+    onCloseModal: () => {
+      setShowModal(false);
+      setShowArchive(false);
+    },
+  });
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-[#0f0f1a] to-[#1a1a2e] text-slate-200 overflow-hidden">

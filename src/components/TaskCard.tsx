@@ -7,6 +7,7 @@ interface TaskCardProps {
   task: Task;
   onClick: () => void;
   onArchive?: () => void;
+  onDuplicate?: () => void;
 }
 
 function getDueLabel(due_date: string | null): { text: string; className: string } | null {
@@ -18,7 +19,7 @@ function getDueLabel(due_date: string | null): { text: string; className: string
   return { text: due_date.slice(5), className: "text-slate-500" };
 }
 
-export function TaskCard({ task, onClick, onArchive }: TaskCardProps) {
+export function TaskCard({ task, onClick, onArchive, onDuplicate }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { task },
@@ -52,14 +53,24 @@ export function TaskCard({ task, onClick, onArchive }: TaskCardProps) {
       {task.description && (
         <div className="text-xs text-slate-500 mt-1.5 line-clamp-2">{task.description}</div>
       )}
-      {task.status === "submitted" && onArchive && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onArchive(); }}
-          className="text-[10px] text-slate-500 hover:text-slate-300 mt-2"
-        >
-          📦 아카이브
-        </button>
-      )}
+      <div className="flex items-center mt-2">
+        {onDuplicate && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+            className="text-[10px] text-slate-500 hover:text-slate-300 mr-2"
+          >
+            📋 복제
+          </button>
+        )}
+        {task.status === "submitted" && onArchive && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onArchive(); }}
+            className="text-[10px] text-slate-500 hover:text-slate-300"
+          >
+            📦 아카이브
+          </button>
+        )}
+      </div>
     </div>
   );
 }

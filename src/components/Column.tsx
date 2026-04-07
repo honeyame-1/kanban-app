@@ -10,9 +10,10 @@ interface ColumnProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
   onArchive: (id: number) => void;
+  onDuplicate: (task: Task) => void;
 }
 
-export function Column({ status, label, icon, tasks, onTaskClick, onArchive }: ColumnProps) {
+export function Column({ status, label, icon, tasks, onTaskClick, onArchive, onDuplicate }: ColumnProps) {
   const { setNodeRef } = useDroppable({ id: status });
 
   return (
@@ -33,6 +34,7 @@ export function Column({ status, label, icon, tasks, onTaskClick, onArchive }: C
               task={task}
               onClick={() => onTaskClick(task)}
               onArchive={status === "submitted" ? () => onArchive(task.id) : undefined}
+              onDuplicate={() => onDuplicate(task)}
             />
           ))}
         </SortableContext>

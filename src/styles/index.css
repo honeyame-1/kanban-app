@@ -17,3 +17,20 @@
   transform: translateY(-1px);
   border-color: rgba(255, 255, 255, 0.2);
 }
+
+/* Light mode */
+html.light body,
+html.light .glass {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(12px);
+}
+
+html.light .glass-card {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+html.light .glass-card:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+}

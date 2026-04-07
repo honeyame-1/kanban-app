@@ -10,9 +10,10 @@ interface KanbanBoardProps {
   onMoveTask: (id: number, status: Status, position: number) => void;
   onTaskClick: (task: Task) => void;
   onArchive: (id: number) => void;
+  onDuplicate: (task: Task) => void;
 }
 
-export function KanbanBoard({ getTasksByStatus, onMoveTask, onTaskClick, onArchive }: KanbanBoardProps) {
+export function KanbanBoard({ getTasksByStatus, onMoveTask, onTaskClick, onArchive, onDuplicate }: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
