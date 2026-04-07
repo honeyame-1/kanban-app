@@ -12,12 +12,6 @@ export function Toolbar({ filter, onFilterChange, onNewTask }: ToolbarProps) {
     <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
       <div className="flex items-center gap-3">
         <input
-          type="date"
-          value={filter.due_date_until || ""}
-          onChange={(e) => onFilterChange({ ...filter, due_filter: undefined, due_date_until: e.target.value || undefined })}
-          className="bg-white/[0.06] border border-white/[0.1] rounded-md px-3 py-2 text-xs text-slate-300 outline-none focus:border-indigo-500/50"
-        />
-        <input
           type="text"
           placeholder="🔍 검색..."
           value={filter.search || ""}
@@ -44,6 +38,14 @@ export function Toolbar({ filter, onFilterChange, onNewTask }: ToolbarProps) {
             <option key={l.key} value={l.key}>{l.label}</option>
           ))}
         </select>
+      </div>
+      <div className="flex items-center gap-3">
+        <input
+          type="date"
+          value={filter.due_date_until || ""}
+          onChange={(e) => onFilterChange({ ...filter, due_filter: undefined, due_date_until: e.target.value || undefined })}
+          className="bg-white/[0.06] border border-white/[0.1] rounded-md px-3 py-2 text-xs text-slate-300 outline-none focus:border-indigo-500/50"
+        />
         <select
           value={filter.due_filter || "all"}
           onChange={(e) => {
@@ -61,13 +63,13 @@ export function Toolbar({ filter, onFilterChange, onNewTask }: ToolbarProps) {
           <option value="week">이번주</option>
           <option value="next_week">다음주까지</option>
         </select>
+        <button
+          onClick={onNewTask}
+          className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg px-4 py-2 transition-colors"
+        >
+          + 새 카드
+        </button>
       </div>
-      <button
-        onClick={onNewTask}
-        className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg px-4 py-2 transition-colors"
-      >
-        + 새 카드
-      </button>
     </div>
   );
 }

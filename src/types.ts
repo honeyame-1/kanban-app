@@ -68,5 +68,7 @@ export const LABELS: { key: string; label: string; color: string }[] = [
   { key: "결재", label: "결재", color: "bg-pink-500/20 text-pink-400" },
   { key: "교육 이수", label: "교육 이수", color: "bg-cyan-500/20 text-cyan-400" },
   { key: "업체 연락처", label: "업체 연락처", color: "bg-teal-500/20 text-teal-400" },
+  { key: "회의", label: "회의", color: "bg-indigo-500/20 text-indigo-400" },
+  { key: "회의자료", label: "회의자료", color: "bg-violet-500/20 text-violet-400" },
   { key: "기타", label: "기타", color: "bg-slate-500/20 text-slate-400" },
 ];
