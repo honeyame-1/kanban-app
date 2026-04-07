@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { isEnabled, enable, disable } from "@tauri-apps/plugin-autostart";
 
 interface TitleBarProps {
@@ -23,9 +23,31 @@ function formatDateTime(date: Date): string {
   return `${y}년 ${m}월 ${d}일 (${day})  ${h}:${min}`;
 }
 
+type MenuId = "autostart" | "theme" | "backup" | "restore" | "recurring" | "stats" | "archive";
+
+const DEFAULT_ORDER: MenuId[] = ["autostart", "theme", "backup", "restore", "recurring", "stats", "archive"];
+
+function loadOrder(): MenuId[] {
+  try {
+    const saved = localStorage.getItem("kanban-menu-order");
+    if (saved) {
+      const parsed = JSON.parse(saved) as MenuId[];
+      // Ensure all items present
+      const all = new Set(DEFAULT_ORDER);
+      const valid = parsed.filter(id => all.has(id));
+      const missing = DEFAULT_ORDER.filter(id => !valid.includes(id));
+      return [...valid, ...missing];
+    }
+  } catch {}
+  return [...DEFAULT_ORDER];
+}
+
 export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme, onToggleTheme, onBackup, onRestore }: TitleBarProps) {
   const [now, setNow] = useState(new Date());
   const [autoStart, setAutoStart] = useState(false);
+  const [menuOrder, setMenuOrder] = useState<MenuId[]>(loadOrder);
+  const [dragItem, setDragItem] = useState<MenuId | null>(null);
+  const [dragOver, setDragOver] = useState<MenuId | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -33,6 +55,39 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
     isEnabled().then(setAutoStart).catch(() => {});
     return () => clearInterval(timer);
   }, []);
+
+  const saveOrder = useCallback((order: MenuId[]) => {
+    setMenuOrder(order);
+    localStorage.setItem("kanban-menu-order", JSON.stringify(order));
+  }, []);
+
+  const handleDragStart = (id: MenuId) => {
+    setDragItem(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: MenuId) => {
+    e.preventDefault();
+    if (dragItem && dragItem !== id) {
+      setDragOver(id);
+    }
+  };
+
+  const handleDrop = (targetId: MenuId) => {
+    if (!dragItem || dragItem === targetId) return;
+    const newOrder = [...menuOrder];
+    const fromIdx = newOrder.indexOf(dragItem);
+    const toIdx = newOrder.indexOf(targetId);
+    newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, dragItem);
+    saveOrder(newOrder);
+    setDragItem(null);
+    setDragOver(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragItem(null);
+    setDragOver(null);
+  };
 
   const toggleAutoStart = async () => {
     try {
@@ -63,8 +118,39 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
       }
     };
     reader.readAsText(file);
-    // Reset so the same file can be selected again
     e.target.value = "";
+  };
+
+  const btnClass = "text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors cursor-grab active:cursor-grabbing";
+
+  const menuItems: Record<MenuId, React.ReactNode> = {
+    autostart: (
+      <button onClick={toggleAutoStart}
+        className={`text-xs border rounded-md px-3 py-1.5 transition-colors ${autoStart ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" : "text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border-white/[0.1]"}`}
+      >
+        {autoStart ? "🟢 자동시작" : "⚫ 자동시작"}
+      </button>
+    ),
+    theme: (
+      <button onClick={onToggleTheme} className={btnClass}>
+        {theme === "dark" ? "☀️" : "🌙"}
+      </button>
+    ),
+    backup: (
+      <button onClick={onBackup} className={btnClass}>💾 백업</button>
+    ),
+    restore: (
+      <button onClick={handleRestoreClick} className={btnClass}>📂 복원</button>
+    ),
+    recurring: (
+      <button onClick={onRecurringClick} className={btnClass}>🔁 반복</button>
+    ),
+    stats: (
+      <button onClick={onStatsClick} className={btnClass}>📊 통계</button>
+    ),
+    archive: (
+      <button onClick={onArchiveClick} className={btnClass}>📦 아카이브</button>
+    ),
   };
 
   return (
@@ -74,56 +160,27 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
         <span className="text-sm text-slate-500">{formatDateTime(now)}</span>
       </div>
       <div className="flex items-center gap-2">
-        <button
-          onClick={toggleAutoStart}
-          className={`text-xs border rounded-md px-3 py-1.5 transition-colors ${autoStart ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" : "text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border-white/[0.1]"}`}
-        >
-          {autoStart ? "🟢 자동시작" : "⚫ 자동시작"}
-        </button>
-        <button
-          onClick={onToggleTheme}
-          className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
-        >
-          {theme === "dark" ? "☀️" : "🌙"}
-        </button>
-        <button
-          onClick={onBackup}
-          className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
-        >
-          💾 백업
-        </button>
-        <button
-          onClick={handleRestoreClick}
-          className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
-        >
-          📂 복원
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-        <button
-          onClick={onRecurringClick}
-          className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
-        >
-          🔁 반복
-        </button>
-        <button
-          onClick={onStatsClick}
-          className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
-        >
-          📊 통계
-        </button>
-        <button
-          onClick={onArchiveClick}
-          className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
-        >
-          📦 아카이브
-        </button>
+        {menuOrder.map((id) => (
+          <div
+            key={id}
+            draggable
+            onDragStart={() => handleDragStart(id)}
+            onDragOver={(e) => handleDragOver(e, id)}
+            onDrop={() => handleDrop(id)}
+            onDragEnd={handleDragEnd}
+            className={`transition-transform ${dragOver === id ? "scale-110 opacity-70" : ""} ${dragItem === id ? "opacity-40" : ""}`}
+          >
+            {menuItems[id]}
+          </div>
+        ))}
       </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        className="hidden"
+        onChange={handleFileChange}
+      />
     </div>
   );
 }
