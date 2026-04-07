@@ -47,6 +47,16 @@ export function useTasks() {
     await fetchTasks();
   };
 
+  const duplicateTask = async (task: Task) => {
+    await api.createTask({
+      title: task.title + " (복사)",
+      description: task.description || undefined,
+      priority: task.priority,
+      due_date: task.due_date || undefined,
+    });
+    await fetchTasks();
+  };
+
   const archiveTask = async (id: number) => {
     await api.archiveTask(id);
     await fetchTasks();
@@ -83,6 +93,7 @@ export function useTasks() {
     createTask,
     updateTask,
     moveTask,
+    duplicateTask,
     archiveTask,
     restoreTask,
     deleteTask,

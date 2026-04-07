@@ -59,6 +59,7 @@ export function KanbanBoard({ getTasksByStatus, onMoveTask, onTaskClick, onArchi
             tasks={getTasksByStatus(col.key)}
             onTaskClick={onTaskClick}
             onArchive={onArchive}
+            onDuplicate={onDuplicate}
           />
         ))}
       </div>
