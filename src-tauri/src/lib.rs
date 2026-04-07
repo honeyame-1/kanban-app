@@ -23,6 +23,8 @@ pub fn run() {
 
             Ok(())
         })
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::get_tasks,
             commands::create_task,
@@ -35,6 +37,14 @@ pub fn run() {
             commands::export_tasks,
             commands::import_tasks,
             commands::get_stats,
+            commands::get_checklist,
+            commands::add_checklist_item,
+            commands::toggle_checklist_item,
+            commands::delete_checklist_item,
+            commands::get_attachments,
+            commands::add_attachment,
+            commands::delete_attachment,
+            commands::open_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

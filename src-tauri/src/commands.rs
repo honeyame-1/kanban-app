@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::db::Database;
-use crate::models::{CreateTaskInput, GetTasksFilter, MoveTaskInput, Task, UpdateTaskInput};
+use crate::models::{Attachment, ChecklistItem, CreateTaskInput, GetTasksFilter, MoveTaskInput, Task, UpdateTaskInput};
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
     Ok(Task {
@@ -378,4 +378,118 @@ pub fn get_stats(db: State<Database>) -> Result<serde_json::Value, String> {
         "overdue": overdue,
         "by_priority": priority_map,
     }))
+}
+
+#[tauri::command]
+pub fn get_checklist(task_id: i64, db: State<Database>) -> Result<Vec<ChecklistItem>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, task_id, text, checked, position FROM checklist_items WHERE task_id = ? ORDER BY position ASC"
+    ).map_err(|e| e.to_string())?;
+    let items = stmt.query_map(rusqlite::params![task_id], |row| {
+        Ok(ChecklistItem {
+            id: row.get(0)?,
+            task_id: row.get(1)?,
+            text: row.get(2)?,
+            checked: row.get::<_, i64>(3)? != 0,
+            position: row.get(4)?,
+        })
+    }).map_err(|e| e.to_string())?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .map_err(|e| e.to_string())?;
+    Ok(items)
+}
+
+#[tauri::command]
+pub fn add_checklist_item(task_id: i64, text: String, db: State<Database>) -> Result<ChecklistItem, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let position: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(position), -1) + 1 FROM checklist_items WHERE task_id = ?",
+        rusqlite::params![task_id], |row| row.get(0)
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT INTO checklist_items (task_id, text, position) VALUES (?, ?, ?)",
+        rusqlite::params![task_id, text, position],
+    ).map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    Ok(ChecklistItem { id, task_id, text, checked: false, position })
+}
+
+#[tauri::command]
+pub fn toggle_checklist_item(id: i64, db: State<Database>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE checklist_items SET checked = CASE WHEN checked = 0 THEN 1 ELSE 0 END WHERE id = ?",
+        rusqlite::params![id],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_checklist_item(id: i64, db: State<Database>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM checklist_items WHERE id = ?", rusqlite::params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_attachments(task_id: i64, db: State<Database>) -> Result<Vec<Attachment>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, task_id, file_name, file_path, created_at FROM attachments WHERE task_id = ? ORDER BY created_at ASC"
+    ).map_err(|e| e.to_string())?;
+    let items = stmt.query_map(rusqlite::params![task_id], |row| {
+        Ok(Attachment {
+            id: row.get(0)?,
+            task_id: row.get(1)?,
+            file_name: row.get(2)?,
+            file_path: row.get(3)?,
+            created_at: row.get(4)?,
+        })
+    }).map_err(|e| e.to_string())?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .map_err(|e| e.to_string())?;
+    Ok(items)
+}
+
+#[tauri::command]
+pub fn add_attachment(task_id: i64, file_name: String, file_path: String, db: State<Database>) -> Result<Attachment, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO attachments (task_id, file_name, file_path) VALUES (?, ?, ?)",
+        rusqlite::params![task_id, file_name, file_path],
+    ).map_err(|e| e.to_string())?;
+    let id = conn.last_insert_rowid();
+    let att = conn.query_row(
+        "SELECT id, task_id, file_name, file_path, created_at FROM attachments WHERE id = ?",
+        rusqlite::params![id],
+        |row| Ok(Attachment {
+            id: row.get(0)?,
+            task_id: row.get(1)?,
+            file_name: row.get(2)?,
+            file_path: row.get(3)?,
+            created_at: row.get(4)?,
+        }),
+    ).map_err(|e| e.to_string())?;
+    Ok(att)
+}
+
+#[tauri::command]
+pub fn delete_attachment(id: i64, db: State<Database>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM attachments WHERE id = ?", rusqlite::params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_file(path: String) -> Result<(), String> {
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &path])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }

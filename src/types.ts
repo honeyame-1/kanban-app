@@ -39,6 +39,22 @@ export interface MoveTaskInput {
   position: number;
 }
 
+export interface ChecklistItem {
+  id: number;
+  task_id: number;
+  text: string;
+  checked: boolean;
+  position: number;
+}
+
+export interface Attachment {
+  id: number;
+  task_id: number;
+  file_name: string;
+  file_path: string;
+  created_at: string;
+}
+
 export interface GetTasksFilter {
   search?: string;
   priority?: Priority;

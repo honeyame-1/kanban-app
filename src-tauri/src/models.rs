@@ -41,6 +41,24 @@ pub struct MoveTaskInput {
     pub position: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ChecklistItem {
+    pub id: i64,
+    pub task_id: i64,
+    pub text: String,
+    pub checked: bool,
+    pub position: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Attachment {
+    pub id: i64,
+    pub task_id: i64,
+    pub file_name: String,
+    pub file_path: String,
+    pub created_at: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct GetTasksFilter {
     pub search: Option<String>,

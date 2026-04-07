@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Task, CreateTaskInput, UpdateTaskInput, MoveTaskInput, GetTasksFilter } from "./types";
+import type { Task, CreateTaskInput, UpdateTaskInput, MoveTaskInput, GetTasksFilter, ChecklistItem, Attachment } from "./types";
 
 export const api = {
   getTasks: (filter: GetTasksFilter = {}) =>
@@ -34,4 +34,28 @@ export const api = {
 
   getStats: () =>
     invoke<{ this_month_submitted: number; total_active: number; total_archived: number; overdue: number; by_priority: Record<string, number> }>("get_stats"),
+
+  getChecklist: (taskId: number) =>
+    invoke<ChecklistItem[]>("get_checklist", { taskId }),
+
+  addChecklistItem: (taskId: number, text: string) =>
+    invoke<ChecklistItem>("add_checklist_item", { taskId, text }),
+
+  toggleChecklistItem: (id: number) =>
+    invoke<void>("toggle_checklist_item", { id }),
+
+  deleteChecklistItem: (id: number) =>
+    invoke<void>("delete_checklist_item", { id }),
+
+  getAttachments: (taskId: number) =>
+    invoke<Attachment[]>("get_attachments", { taskId }),
+
+  addAttachment: (taskId: number, fileName: string, filePath: string) =>
+    invoke<Attachment>("add_attachment", { taskId, fileName, filePath }),
+
+  deleteAttachment: (id: number) =>
+    invoke<void>("delete_attachment", { id }),
+
+  openFile: (path: string) =>
+    invoke<void>("open_file", { path }),
 };
