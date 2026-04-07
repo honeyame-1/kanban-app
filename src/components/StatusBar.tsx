@@ -16,7 +16,7 @@ const CHEERS = [
 function getCheer(count: number): string {
   if (count === 0) return "";
   if (count >= 5) return `오늘 ${count}개나 처리했어요! 정말 대단해요! 🏆`;
-  if (count >= 3) return `오늘 ${count}개 처리! ${CHEERS[Math.floor(Math.random() * CHEERS.length)]}`;
+  if (count >= 3) return `오늘 ${count}개 처리! ${CHEERS[count % CHEERS.length]}`;
   return `오늘 ${count}개 처리! 잘하고 있어요! 👍`;
 }
 

@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 interface TitleBarProps {
   onArchiveClick: () => void;
   onStatsClick: () => void;
+  onRecurringClick: () => void;
   theme: string;
   onToggleTheme: () => void;
   onBackup: () => void;
@@ -21,7 +22,7 @@ function formatDateTime(date: Date): string {
   return `${y}년 ${m}월 ${d}일 (${day})  ${h}:${min}`;
 }
 
-export function TitleBar({ onArchiveClick, onStatsClick, theme, onToggleTheme, onBackup, onRestore }: TitleBarProps) {
+export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme, onToggleTheme, onBackup, onRestore }: TitleBarProps) {
   const [now, setNow] = useState(new Date());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,6 +82,12 @@ export function TitleBar({ onArchiveClick, onStatsClick, theme, onToggleTheme, o
           className="hidden"
           onChange={handleFileChange}
         />
+        <button
+          onClick={onRecurringClick}
+          className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
+        >
+          🔁 반복
+        </button>
         <button
           onClick={onStatsClick}
           className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"

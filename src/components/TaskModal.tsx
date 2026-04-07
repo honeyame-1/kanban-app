@@ -5,7 +5,7 @@ import type { Priority, ChecklistItem, Attachment } from "../types";
 import { api } from "../api";
 
 interface TaskModalProps {
-  task: { title: string; description: string; priority: string; due_date: string | null; label?: string } | null;
+  task: { id?: number; title: string; description: string; priority: string; due_date: string | null; label?: string } | null;
   onSave: (input: { title: string; description?: string; priority?: Priority; due_date?: string; label?: string }) => void;
   onClose: () => void;
 }
@@ -22,7 +22,7 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
 
   useEffect(() => {
     if (task && 'id' in task) {
-      const taskId = (task as any).id;
+      const taskId = task!.id!;
       api.getChecklist(taskId).then(setCheckItems);
       api.getAttachments(taskId).then(setAttachments);
     }
@@ -45,7 +45,7 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
     });
     if (!result) return;
     const paths = Array.isArray(result) ? result : [result];
-    const taskId = (task as any).id;
+    const taskId = task!.id!;
     for (const filePath of paths) {
       const fileName = filePath.split(/[\\/]/).pop() || filePath;
       const att = await api.addAttachment(taskId, fileName, filePath);
@@ -184,7 +184,7 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
               onKeyDown={async (e) => {
                 if (e.key === "Enter" && newItemText.trim()) {
                   e.preventDefault();
-                  const item = await api.addChecklistItem((task as any).id, newItemText.trim());
+                  const item = await api.addChecklistItem(task!.id!, newItemText.trim());
                   setCheckItems(prev => [...prev, item]);
                   setNewItemText("");
                 }

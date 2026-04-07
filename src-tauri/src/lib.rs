@@ -45,6 +45,11 @@ pub fn run() {
             commands::add_attachment,
             commands::delete_attachment,
             commands::open_file,
+            commands::get_recurring_tasks,
+            commands::create_recurring_task,
+            commands::delete_recurring_task,
+            commands::toggle_recurring_task,
+            commands::generate_recurring_tasks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

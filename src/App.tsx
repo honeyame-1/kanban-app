@@ -7,6 +7,7 @@ import { StatusBar } from "./components/StatusBar";
 import { TaskModal } from "./components/TaskModal";
 import { ArchiveView } from "./components/ArchiveView";
 import { StatsView } from "./components/StatsView";
+import { RecurringView } from "./components/RecurringView";
 import { useTasks } from "./hooks/useTasks";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useTheme } from "./hooks/useTheme";
@@ -21,6 +22,7 @@ function App() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showRecurring, setShowRecurring] = useState(false);
 
   const handleNewTask = () => {
     setEditingTask(null);
@@ -72,7 +74,7 @@ function App() {
 
   return (
     <div className={`h-screen flex flex-col overflow-hidden ${theme === "dark" ? "bg-gradient-to-br from-[#0f0f1a] to-[#1a1a2e] text-slate-200" : "bg-gradient-to-br from-[#f0f2f5] to-[#e8eaed] text-slate-800"}`}>
-      <TitleBar onArchiveClick={handleArchiveClick} onStatsClick={() => setShowStats(true)} theme={theme} onToggleTheme={toggleTheme} onBackup={handleBackup} onRestore={handleRestore} />
+      <TitleBar onArchiveClick={handleArchiveClick} onStatsClick={() => setShowStats(true)} onRecurringClick={() => setShowRecurring(true)} theme={theme} onToggleTheme={toggleTheme} onBackup={handleBackup} onRestore={handleRestore} />
       <Toolbar filter={taskStore.filter} onFilterChange={taskStore.setFilter} onNewTask={handleNewTask} />
       <KanbanBoard
         getTasksByStatus={taskStore.getTasksByStatus}
@@ -109,6 +111,10 @@ function App() {
 
       {showStats && (
         <StatsView onClose={() => setShowStats(false)} />
+      )}
+
+      {showRecurring && (
+        <RecurringView onClose={() => setShowRecurring(false)} onGenerated={taskStore.fetchTasks} />
       )}
     </div>
   );

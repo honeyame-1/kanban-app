@@ -1,7 +1,8 @@
+use chrono::Datelike;
 use tauri::State;
 
 use crate::db::Database;
-use crate::models::{Attachment, ChecklistItem, CreateTaskInput, GetTasksFilter, MoveTaskInput, Task, UpdateTaskInput};
+use crate::models::{Attachment, ChecklistItem, CreateRecurringInput, CreateTaskInput, GetTasksFilter, MoveTaskInput, RecurringTask, Task, UpdateTaskInput};
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
     Ok(Task {
@@ -155,8 +156,7 @@ pub fn update_task(input: UpdateTaskInput, db: State<Database>) -> Result<Task, 
         params.push(Box::new(label.clone()));
     }
 
-    if input.due_date.is_some() || input.title.is_none() {
-        // Always update due_date if provided (even None to clear it)
+    if input.due_date.is_some() {
         set_clauses.push("due_date = ?".to_string());
         params.push(Box::new(input.due_date.clone()));
     }
@@ -306,6 +306,7 @@ pub fn import_tasks(db: State<Database>, json_data: String) -> Result<(), String
     let tasks: Vec<Task> = serde_json::from_str(&json_data).map_err(|e| e.to_string())?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
+    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM tasks", []).map_err(|e| e.to_string())?;
 
     for task in tasks {
@@ -325,8 +326,13 @@ pub fn import_tasks(db: State<Database>, json_data: String) -> Result<(), String
                 task.label
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            let _ = conn.execute_batch("ROLLBACK");
+            e.to_string()
+        })?;
     }
+
+    conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -487,9 +493,148 @@ pub fn delete_attachment(id: i64, db: State<Database>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn open_file(path: String) -> Result<(), String> {
+    // Validate path: reject shell metacharacters
+    if path.contains('&') || path.contains('|') || path.contains(';') || path.contains('`') {
+        return Err("Invalid file path".to_string());
+    }
     std::process::Command::new("cmd")
         .args(["/C", "start", "", &path])
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// === Recurring Tasks ===
+
+fn map_recurring_row(row: &rusqlite::Row) -> rusqlite::Result<RecurringTask> {
+    Ok(RecurringTask {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        description: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+        priority: row.get(3)?,
+        label: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
+        recurrence: row.get(5)?,
+        day_of_week: row.get(6)?,
+        day_of_month: row.get(7)?,
+        auto_due_days: row.get(8)?,
+        enabled: row.get::<_, i64>(9)? != 0,
+        last_generated: row.get(10)?,
+    })
+}
+
+#[tauri::command]
+pub fn get_recurring_tasks(db: State<Database>) -> Result<Vec<RecurringTask>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, title, description, priority, label, recurrence, day_of_week, day_of_month, auto_due_days, enabled, last_generated FROM recurring_tasks ORDER BY id ASC"
+    ).map_err(|e| e.to_string())?;
+    let items = stmt.query_map([], map_recurring_row)
+        .map_err(|e| e.to_string())?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| e.to_string())?;
+    Ok(items)
+}
+
+#[tauri::command]
+pub fn create_recurring_task(input: CreateRecurringInput, db: State<Database>) -> Result<RecurringTask, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO recurring_tasks (title, description, priority, label, recurrence, day_of_week, day_of_month, auto_due_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        rusqlite::params![
+            input.title,
+            input.description.unwrap_or_default(),
+            input.priority.unwrap_or_else(|| "normal".to_string()),
+            input.label.unwrap_or_default(),
+            input.recurrence,
+            input.day_of_week,
+            input.day_of_month,
+            input.auto_due_days.unwrap_or(0),
+        ],
+    ).map_err(|e| e.to_string())?;
+    let id = conn.last_insert_rowid();
+    let task = conn.query_row(
+        "SELECT id, title, description, priority, label, recurrence, day_of_week, day_of_month, auto_due_days, enabled, last_generated FROM recurring_tasks WHERE id = ?",
+        rusqlite::params![id], map_recurring_row,
+    ).map_err(|e| e.to_string())?;
+    Ok(task)
+}
+
+#[tauri::command]
+pub fn delete_recurring_task(id: i64, db: State<Database>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM recurring_tasks WHERE id = ?", rusqlite::params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn toggle_recurring_task(id: i64, db: State<Database>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE recurring_tasks SET enabled = CASE WHEN enabled = 0 THEN 1 ELSE 0 END WHERE id = ?",
+        rusqlite::params![id],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn generate_recurring_tasks(db: State<Database>) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let weekday = chrono::Local::now().weekday().num_days_from_monday() as i64; // 0=Mon..6=Sun
+
+    let mut stmt = conn.prepare(
+        "SELECT id, title, description, priority, label, recurrence, day_of_week, day_of_month, auto_due_days, enabled, last_generated FROM recurring_tasks WHERE enabled = 1"
+    ).map_err(|e| e.to_string())?;
+
+    let recurrings: Vec<RecurringTask> = stmt.query_map([], map_recurring_row)
+        .map_err(|e| e.to_string())?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| e.to_string())?;
+
+    let mut count: i64 = 0;
+
+    for rt in recurrings {
+        if rt.last_generated.as_deref() == Some(&today) {
+            continue; // already generated today
+        }
+
+        let should_generate = match rt.recurrence.as_str() {
+            "daily" => true,
+            "weekly" => rt.day_of_week.map_or(false, |d| d == weekday),
+            "monthly" => {
+                let day_of_month = chrono::Local::now().day() as i64;
+                rt.day_of_month.map_or(false, |d| d == day_of_month)
+            }
+            _ => false,
+        };
+
+        if should_generate {
+            let due_date = if rt.auto_due_days > 0 {
+                let due = chrono::Local::now() + chrono::Duration::days(rt.auto_due_days);
+                Some(due.format("%Y-%m-%d").to_string())
+            } else {
+                None
+            };
+
+            conn.execute(
+                "UPDATE tasks SET position = position + 1 WHERE status = 'todo' AND archived = 0",
+                [],
+            ).map_err(|e| e.to_string())?;
+
+            conn.execute(
+                "INSERT INTO tasks (title, description, status, priority, due_date, position, archived, created_at, updated_at, label) VALUES (?, ?, 'todo', ?, ?, 0, 0, datetime('now'), datetime('now'), ?)",
+                rusqlite::params![rt.title, rt.description, rt.priority, due_date, rt.label],
+            ).map_err(|e| e.to_string())?;
+
+            conn.execute(
+                "UPDATE recurring_tasks SET last_generated = ? WHERE id = ?",
+                rusqlite::params![today, rt.id],
+            ).map_err(|e| e.to_string())?;
+
+            count += 1;
+        }
+    }
+
+    Ok(count)
 }

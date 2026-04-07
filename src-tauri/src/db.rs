@@ -17,14 +17,24 @@ impl Database {
         let migration = include_str!("../migrations/001_create_tasks.sql");
         conn.execute_batch(migration)?;
 
-        let migration2 = include_str!("../migrations/002_add_label.sql");
-        conn.execute_batch(migration2)?;
+        // Migration 002: add label column (idempotent)
+        let has_label: bool = conn
+            .prepare("PRAGMA table_info(tasks)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .any(|col| col.as_deref() == Ok("label"));
+        if !has_label {
+            let migration2 = include_str!("../migrations/002_add_label.sql");
+            conn.execute_batch(migration2)?;
+        }
 
         let migration3 = include_str!("../migrations/003_create_checklists.sql");
         conn.execute_batch(migration3)?;
 
         let migration4 = include_str!("../migrations/004_create_attachments.sql");
         conn.execute_batch(migration4)?;
+
+        let migration5 = include_str!("../migrations/005_create_recurring.sql");
+        conn.execute_batch(migration5)?;
 
         Ok(Database {
             conn: Mutex::new(conn),

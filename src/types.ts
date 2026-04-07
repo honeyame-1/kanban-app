@@ -55,6 +55,33 @@ export interface Attachment {
   created_at: string;
 }
 
+export interface RecurringTask {
+  id: number;
+  title: string;
+  description: string;
+  priority: string;
+  label: string;
+  recurrence: string;
+  day_of_week: number | null;
+  day_of_month: number | null;
+  auto_due_days: number;
+  enabled: boolean;
+  last_generated: string | null;
+}
+
+export interface CreateRecurringInput {
+  title: string;
+  description?: string;
+  priority?: string;
+  label?: string;
+  recurrence: string;
+  day_of_week?: number;
+  day_of_month?: number;
+  auto_due_days?: number;
+}
+
+export const DAYS_OF_WEEK = ["월", "화", "수", "목", "금", "토", "일"];
+
 export interface GetTasksFilter {
   search?: string;
   priority?: Priority;

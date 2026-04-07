@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Task, CreateTaskInput, UpdateTaskInput, MoveTaskInput, GetTasksFilter, ChecklistItem, Attachment } from "./types";
+import type { Task, CreateTaskInput, UpdateTaskInput, MoveTaskInput, GetTasksFilter, ChecklistItem, Attachment, RecurringTask, CreateRecurringInput } from "./types";
 
 export const api = {
   getTasks: (filter: GetTasksFilter = {}) =>
@@ -58,4 +58,19 @@ export const api = {
 
   openFile: (path: string) =>
     invoke<void>("open_file", { path }),
+
+  getRecurringTasks: () =>
+    invoke<RecurringTask[]>("get_recurring_tasks"),
+
+  createRecurringTask: (input: CreateRecurringInput) =>
+    invoke<RecurringTask>("create_recurring_task", { input }),
+
+  deleteRecurringTask: (id: number) =>
+    invoke<void>("delete_recurring_task", { id }),
+
+  toggleRecurringTask: (id: number) =>
+    invoke<void>("toggle_recurring_task", { id }),
+
+  generateRecurringTasks: () =>
+    invoke<number>("generate_recurring_tasks"),
 };

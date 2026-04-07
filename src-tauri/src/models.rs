@@ -59,6 +59,33 @@ pub struct Attachment {
     pub created_at: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RecurringTask {
+    pub id: i64,
+    pub title: String,
+    pub description: String,
+    pub priority: String,
+    pub label: String,
+    pub recurrence: String,
+    pub day_of_week: Option<i64>,
+    pub day_of_month: Option<i64>,
+    pub auto_due_days: i64,
+    pub enabled: bool,
+    pub last_generated: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateRecurringInput {
+    pub title: String,
+    pub description: Option<String>,
+    pub priority: Option<String>,
+    pub label: Option<String>,
+    pub recurrence: String,
+    pub day_of_week: Option<i64>,
+    pub day_of_month: Option<i64>,
+    pub auto_due_days: Option<i64>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct GetTasksFilter {
     pub search: Option<String>,
