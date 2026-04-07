@@ -8,6 +8,8 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ filter, onFilterChange, onNewTask }: ToolbarProps) {
+  const dueSelectValue = filter.due_date_until !== undefined ? "custom" : (filter.due_filter || "all");
+
   return (
     <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
       <div className="flex items-center gap-3">
@@ -29,14 +31,33 @@ export function Toolbar({ filter, onFilterChange, onNewTask }: ToolbarProps) {
           ))}
         </select>
         <select
-          value={filter.due_filter || "all"}
-          onChange={(e) => onFilterChange({ ...filter, due_filter: e.target.value === "all" ? undefined : e.target.value as "today" | "week" })}
+          value={dueSelectValue}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val === "all") {
+              onFilterChange({ ...filter, due_filter: undefined, due_date_until: undefined });
+            } else if (val === "custom") {
+              onFilterChange({ ...filter, due_filter: undefined, due_date_until: filter.due_date_until || "" });
+            } else {
+              onFilterChange({ ...filter, due_filter: val as "today" | "week" | "next_week", due_date_until: undefined });
+            }
+          }}
           className="bg-white/[0.06] border border-white/[0.1] rounded-md px-3 py-2 text-xs text-slate-300 outline-none"
         >
           <option value="all">마감일 전체</option>
           <option value="today">오늘까지</option>
           <option value="week">이번주</option>
+          <option value="next_week">다음주까지</option>
+          <option value="custom">날짜 선택</option>
         </select>
+        {dueSelectValue === "custom" && (
+          <input
+            type="date"
+            value={filter.due_date_until || ""}
+            onChange={(e) => onFilterChange({ ...filter, due_filter: undefined, due_date_until: e.target.value || undefined })}
+            className="bg-white/[0.06] border border-white/[0.1] rounded-md px-3 py-2 text-xs text-slate-300 outline-none"
+          />
+        )}
       </div>
       <button
         onClick={onNewTask}

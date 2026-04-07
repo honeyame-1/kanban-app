@@ -51,7 +51,19 @@ pub fn get_tasks(filter: GetTasksFilter, db: State<Database>) -> Result<Vec<Task
                     "due_date IS NOT NULL AND due_date <= date('now', '+7 days')".to_string(),
                 );
             }
+            "next_week" => {
+                conditions.push(
+                    "due_date IS NOT NULL AND due_date <= date('now', '+14 days')".to_string(),
+                );
+            }
             _ => {}
+        }
+    }
+
+    if let Some(ref due_date_until) = filter.due_date_until {
+        if !due_date_until.is_empty() {
+            conditions.push("due_date IS NOT NULL AND due_date <= ?".to_string());
+            params.push(Box::new(due_date_until.clone()));
         }
     }
 

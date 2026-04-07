@@ -1,4 +1,4 @@
-import { DndContext, DragOverlay, closestCorners, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { useState } from "react";
 import { Column } from "./Column";
 import { TaskCard } from "./TaskCard";
@@ -14,6 +14,9 @@ interface KanbanBoardProps {
 
 export function KanbanBoard({ getTasksByStatus, onMoveTask, onTaskClick, onArchive }: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
 
   function handleDragStart(event: DragStartEvent) {
     const task = event.active.data.current?.task as Task | undefined;
@@ -44,7 +47,7 @@ export function KanbanBoard({ getTasksByStatus, onMoveTask, onTaskClick, onArchi
   }
 
   return (
-    <DndContext collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex gap-4 p-5 flex-1 overflow-hidden">
         {COLUMNS.map((col) => (
           <Column

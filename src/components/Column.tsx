@@ -16,7 +16,7 @@ export function Column({ status, label, icon, tasks, onTaskClick, onArchive }: C
   const { setNodeRef } = useDroppable({ id: status });
 
   return (
-    <div ref={setNodeRef} className="flex-1 glass rounded-xl p-3.5 min-h-[400px]">
+    <div ref={setNodeRef} className="flex-1 glass rounded-xl p-3.5 flex flex-col min-w-0 overflow-hidden">
       <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-white/[0.06]">
         <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
           {icon} {label}
@@ -25,19 +25,21 @@ export function Column({ status, label, icon, tasks, onTaskClick, onArchive }: C
           </span>
         </div>
       </div>
-      <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        {tasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            onClick={() => onTaskClick(task)}
-            onArchive={status === "submitted" ? () => onArchive(task.id) : undefined}
-          />
-        ))}
-      </SortableContext>
-      {tasks.length === 0 && (
-        <div className="text-center text-xs text-slate-600 py-8">카드 없음</div>
-      )}
+      <div className="flex-1 overflow-y-auto">
+        <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+          {tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onClick={() => onTaskClick(task)}
+              onArchive={status === "submitted" ? () => onArchive(task.id) : undefined}
+            />
+          ))}
+        </SortableContext>
+        {tasks.length === 0 && (
+          <div className="text-center text-xs text-slate-600 py-8">카드 없음</div>
+        )}
+      </div>
     </div>
   );
 }

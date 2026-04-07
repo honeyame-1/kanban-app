@@ -43,4 +43,5 @@ pub struct GetTasksFilter {
     pub search: Option<String>,
     pub priority: Option<String>,
     pub due_filter: Option<String>,
+    pub due_date_until: Option<String>,
 }

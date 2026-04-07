@@ -1,6 +1,6 @@
 export type Status = "todo" | "in_progress" | "submitted";
 export type Priority = "urgent" | "high" | "normal" | "low";
-export type DueFilter = "today" | "week" | "all";
+export type DueFilter = "today" | "week" | "next_week" | "all";
 
 export interface Task {
   id: number;
@@ -40,6 +40,7 @@ export interface GetTasksFilter {
   search?: string;
   priority?: Priority;
   due_filter?: DueFilter;
+  due_date_until?: string;
 }
 
 export const COLUMNS: { key: Status; label: string; icon: string }[] = [
