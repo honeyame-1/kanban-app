@@ -45,6 +45,7 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
   const [autoStart, setAutoStart] = useState(false);
   const [menuOrder, setMenuOrder] = useState<MenuId[]>(loadOrder);
   const [editing, setEditing] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,13 +54,9 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
     return () => clearInterval(timer);
   }, []);
 
-  const moveItem = (fromIdx: number, dir: -1 | 1) => {
-    const toIdx = fromIdx + dir;
-    if (toIdx < 0 || toIdx >= menuOrder.length) return;
-    const newOrder = [...menuOrder];
-    [newOrder[fromIdx], newOrder[toIdx]] = [newOrder[toIdx], newOrder[fromIdx]];
-    setMenuOrder(newOrder);
-    localStorage.setItem("kanban-menu-order", JSON.stringify(newOrder));
+  const saveOrder = (order: MenuId[]) => {
+    setMenuOrder(order);
+    localStorage.setItem("kanban-menu-order", JSON.stringify(order));
   };
 
   const toggleAutoStart = async () => {
@@ -85,14 +82,24 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
 
   const btnClass = "text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors";
 
-  const menuItems: Record<MenuId, { label: string; onClick: () => void; custom?: boolean }> = {
-    autostart: { label: autoStart ? "🟢 자동시작" : "⚫ 자동시작", onClick: toggleAutoStart, custom: true },
-    theme: { label: theme === "dark" ? "☀️" : "🌙", onClick: onToggleTheme },
-    backup: { label: "💾 백업", onClick: onBackup },
-    restore: { label: "📂 복원", onClick: handleRestoreClick },
-    recurring: { label: "🔁 반복", onClick: onRecurringClick },
-    stats: { label: "📊 통계", onClick: onStatsClick },
-    archive: { label: "📦 아카이브", onClick: onArchiveClick },
+  const menuLabels: Record<MenuId, string> = {
+    autostart: autoStart ? "🟢 자동시작" : "⚫ 자동시작",
+    theme: theme === "dark" ? "☀️" : "🌙",
+    backup: "💾 백업",
+    restore: "📂 복원",
+    recurring: "🔁 반복",
+    stats: "📊 통계",
+    archive: "📦 아카이브",
+  };
+
+  const menuActions: Record<MenuId, () => void> = {
+    autostart: toggleAutoStart,
+    theme: onToggleTheme,
+    backup: onBackup,
+    restore: handleRestoreClick,
+    recurring: onRecurringClick,
+    stats: onStatsClick,
+    archive: onArchiveClick,
   };
 
   return (
@@ -102,28 +109,42 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
         <span className="text-sm text-slate-500">{formatDateTime(now)}</span>
       </div>
       <div className="flex items-center gap-2">
-        {menuOrder.map((id, idx) => {
-          const item = menuItems[id];
-          return (
-            <div key={id} className="flex items-center gap-0.5">
-              {editing && (
-                <div className="flex flex-col mr-0.5">
-                  <button onClick={() => moveItem(idx, -1)} className="text-[8px] text-slate-600 hover:text-slate-300 leading-none">◀</button>
-                  <button onClick={() => moveItem(idx, 1)} className="text-[8px] text-slate-600 hover:text-slate-300 leading-none">▶</button>
-                </div>
-              )}
-              <button
-                onClick={editing ? undefined : item.onClick}
-                className={id === "autostart" && autoStart
-                  ? `text-xs border rounded-md px-3 py-1.5 transition-colors text-emerald-400 bg-emerald-500/10 border-emerald-500/30`
-                  : btnClass
-                }
-              >
-                {item.label}
-              </button>
-            </div>
-          );
-        })}
+        {menuOrder.map((id, idx) => (
+          <div
+            key={id}
+            draggable={editing}
+            onDragStart={(e) => {
+              if (!editing) return;
+              setDragIdx(idx);
+              e.dataTransfer.effectAllowed = "move";
+            }}
+            onDragOver={(e) => {
+              if (!editing || dragIdx === null) return;
+              e.preventDefault();
+            }}
+            onDrop={() => {
+              if (!editing || dragIdx === null || dragIdx === idx) { setDragIdx(null); return; }
+              const newOrder = [...menuOrder];
+              const [moved] = newOrder.splice(dragIdx, 1);
+              newOrder.splice(idx, 0, moved);
+              saveOrder(newOrder);
+              setDragIdx(null);
+            }}
+            onDragEnd={() => setDragIdx(null)}
+            className={`${editing ? "cursor-grab active:cursor-grabbing" : ""} ${dragIdx === idx ? "opacity-30" : ""}`}
+          >
+            <span
+              onClick={editing ? undefined : menuActions[id]}
+              className={`inline-block select-none ${
+                id === "autostart" && autoStart
+                  ? "text-xs border rounded-md px-3 py-1.5 transition-colors text-emerald-400 bg-emerald-500/10 border-emerald-500/30 cursor-pointer"
+                  : `${btnClass} cursor-pointer`
+              } ${editing ? "pointer-events-none ring-1 ring-indigo-500/30 ring-offset-1 ring-offset-transparent" : ""}`}
+            >
+              {menuLabels[id]}
+            </span>
+          </div>
+        ))}
         <button
           onClick={() => setEditing(!editing)}
           className={`text-xs rounded-md px-2 py-1.5 transition-colors ${editing ? "text-indigo-400 bg-indigo-500/10 border border-indigo-500/30" : "text-slate-600 hover:text-slate-400"}`}
