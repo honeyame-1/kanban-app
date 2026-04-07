@@ -10,10 +10,12 @@ import { StatsView } from "./components/StatsView";
 import { useTasks } from "./hooks/useTasks";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useTheme } from "./hooks/useTheme";
+import { useNotifications } from "./hooks/useNotifications";
 import type { Task } from "./types";
 
 function App() {
   const taskStore = useTasks();
+  useNotifications(taskStore.tasks);
   const { theme, toggleTheme } = useTheme();
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
