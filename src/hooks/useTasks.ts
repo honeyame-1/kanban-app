@@ -53,6 +53,7 @@ export function useTasks() {
       description: task.description || undefined,
       priority: task.priority,
       due_date: task.due_date || undefined,
+      label: task.label || undefined,
     });
     await fetchTasks();
   };
@@ -98,5 +99,6 @@ export function useTasks() {
     restoreTask,
     deleteTask,
     fetchArchivedTasks,
+    fetchTasks,
   };
 }
