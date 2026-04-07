@@ -73,4 +73,7 @@ export const api = {
 
   generateRecurringTasks: () =>
     invoke<number>("generate_recurring_tasks"),
+
+  getWeather: (lat: number, lon: number) =>
+    invoke<{ temp: string; humidity: string; wind: string; desc: string }>("get_weather", { lat, lon }),
 };

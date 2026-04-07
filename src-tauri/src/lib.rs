@@ -51,6 +51,7 @@ pub fn run() {
             commands::delete_recurring_task,
             commands::toggle_recurring_task,
             commands::generate_recurring_tasks,
+            commands::get_weather,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

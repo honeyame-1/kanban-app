@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { isEnabled, enable, disable } from "@tauri-apps/plugin-autostart";
+import { api } from "../api";
 
 interface TitleBarProps {
   onArchiveClick: () => void;
@@ -40,12 +41,35 @@ function loadOrder(): MenuId[] {
   return [...DEFAULT_ORDER];
 }
 
+const REGIONS: { name: string; lat: number; lon: number }[] = [
+  { name: "인천", lat: 37.4563, lon: 126.7052 },
+  { name: "서울", lat: 37.5665, lon: 126.9780 },
+  { name: "부산", lat: 35.1796, lon: 129.0756 },
+  { name: "대구", lat: 35.8714, lon: 128.6014 },
+  { name: "대전", lat: 36.3504, lon: 127.3845 },
+  { name: "광주", lat: 35.1595, lon: 126.8526 },
+  { name: "울산", lat: 35.5384, lon: 129.3114 },
+  { name: "수원", lat: 37.2636, lon: 127.0286 },
+  { name: "성남", lat: 37.4200, lon: 127.1266 },
+  { name: "고양", lat: 37.6584, lon: 126.8320 },
+];
+
+function loadRegion(): { name: string; lat: number; lon: number } {
+  try {
+    const saved = localStorage.getItem("kanban-weather-region");
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return REGIONS[0]; // 인천 기본
+}
+
 export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme, onToggleTheme, onBackup, onRestore }: TitleBarProps) {
   const [now, setNow] = useState(new Date());
   const [autoStart, setAutoStart] = useState(false);
   const [menuOrder, setMenuOrder] = useState<MenuId[]>(loadOrder);
   const [editing, setEditing] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [weather, setWeather] = useState<{ temp: string; desc: string } | null>(null);
+  const [region, setRegion] = useState(loadRegion);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,6 +77,25 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
     isEnabled().then(setAutoStart).catch(() => {});
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const fetchWeather = () => {
+      api.getWeather(region.lat, region.lon)
+        .then(w => setWeather({ temp: w.temp, desc: w.desc }))
+        .catch(() => {});
+    };
+    fetchWeather();
+    const timer = setInterval(fetchWeather, 1800000); // 30분마다
+    return () => clearInterval(timer);
+  }, [region]);
+
+  const changeRegion = (name: string) => {
+    const r = REGIONS.find(r => r.name === name);
+    if (r) {
+      setRegion(r);
+      localStorage.setItem("kanban-weather-region", JSON.stringify(r));
+    }
+  };
 
   const saveOrder = (order: MenuId[]) => {
     setMenuOrder(order);
@@ -107,6 +150,18 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
       <div className="flex items-center gap-4">
         <span className="text-sm text-slate-400 font-medium">업무 칸반</span>
         <span className="text-sm text-slate-500">{formatDateTime(now)}</span>
+        {weather && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-400">{weather.desc} {weather.temp}</span>
+            <select
+              value={region.name}
+              onChange={(e) => changeRegion(e.target.value)}
+              className="bg-transparent text-[10px] text-slate-500 outline-none cursor-pointer"
+            >
+              {REGIONS.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
+            </select>
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2">
         {menuOrder.map((id, idx) => (

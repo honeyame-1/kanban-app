@@ -638,3 +638,43 @@ pub fn generate_recurring_tasks(db: State<Database>) -> Result<i64, String> {
 
     Ok(count)
 }
+
+// === Weather ===
+
+#[tauri::command]
+pub fn get_weather(lat: f64, lon: f64) -> Result<serde_json::Value, String> {
+    let url = format!(
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia/Seoul",
+        lat, lon
+    );
+    let body: serde_json::Value = ureq::get(&url).call().map_err(|e| e.to_string())?
+        .into_json::<serde_json::Value>().map_err(|e| e.to_string())?;
+
+    let current = &body["current"];
+    let temp = current["temperature_2m"].as_f64().unwrap_or(0.0);
+    let humidity = current["relative_humidity_2m"].as_f64().unwrap_or(0.0);
+    let wind = current["wind_speed_10m"].as_f64().unwrap_or(0.0);
+    let code = current["weather_code"].as_i64().unwrap_or(0);
+
+    let desc = match code {
+        0 => "맑음 ☀️",
+        1 | 2 => "구름 조금 🌤️",
+        3 => "흐림 ☁️",
+        45 | 48 => "안개 🌫️",
+        51 | 53 | 55 => "이슬비 🌦️",
+        61 | 63 | 65 => "비 🌧️",
+        66 | 67 => "눈비 🌨️",
+        71 | 73 | 75 | 77 => "눈 ❄️",
+        80 | 81 | 82 => "소나기 🌧️",
+        85 | 86 => "눈보라 ❄️",
+        95 | 96 | 99 => "뇌우 ⛈️",
+        _ => "알 수 없음",
+    };
+
+    Ok(serde_json::json!({
+        "temp": format!("{:.0}°C", temp),
+        "humidity": format!("{}%", humidity as i64),
+        "wind": format!("{:.0}m/s", wind),
+        "desc": desc,
+    }))
+}
