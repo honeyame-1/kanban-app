@@ -15,6 +15,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
         archived: row.get::<_, i64>(7)? != 0,
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
+        label: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
     })
 }
 
@@ -38,6 +39,13 @@ pub fn get_tasks(filter: GetTasksFilter, db: State<Database>) -> Result<Vec<Task
         if !priority.is_empty() {
             conditions.push("priority = ?".to_string());
             params.push(Box::new(priority.clone()));
+        }
+    }
+
+    if let Some(ref label) = filter.label {
+        if !label.is_empty() {
+            conditions.push("label = ?".to_string());
+            params.push(Box::new(label.clone()));
         }
     }
 
@@ -69,7 +77,7 @@ pub fn get_tasks(filter: GetTasksFilter, db: State<Database>) -> Result<Vec<Task
 
     let where_clause = conditions.join(" AND ");
     let sql = format!(
-        "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at \
+        "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
          FROM tasks WHERE {} ORDER BY status, position ASC",
         where_clause
     );
@@ -98,18 +106,19 @@ pub fn create_task(input: CreateTaskInput, db: State<Database>) -> Result<Task, 
 
     let description = input.description.unwrap_or_default();
     let priority = input.priority.unwrap_or_else(|| "normal".to_string());
+    let label = input.label.unwrap_or_default();
 
     conn.execute(
-        "INSERT INTO tasks (title, description, status, priority, due_date, position, archived, created_at, updated_at) \
-         VALUES (?, ?, 'todo', ?, ?, 0, 0, datetime('now'), datetime('now'))",
-        rusqlite::params![input.title, description, priority, input.due_date],
+        "INSERT INTO tasks (title, description, status, priority, due_date, position, archived, created_at, updated_at, label) \
+         VALUES (?, ?, 'todo', ?, ?, 0, 0, datetime('now'), datetime('now'), ?)",
+        rusqlite::params![input.title, description, priority, input.due_date, label],
     )
     .map_err(|e| e.to_string())?;
 
     let id = conn.last_insert_rowid();
     let task = conn
         .query_row(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at \
+            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
              FROM tasks WHERE id = ?",
             rusqlite::params![id],
             map_row,
@@ -141,6 +150,11 @@ pub fn update_task(input: UpdateTaskInput, db: State<Database>) -> Result<Task, 
         params.push(Box::new(priority.clone()));
     }
 
+    if let Some(ref label) = input.label {
+        set_clauses.push("label = ?".to_string());
+        params.push(Box::new(label.clone()));
+    }
+
     if input.due_date.is_some() || input.title.is_none() {
         // Always update due_date if provided (even None to clear it)
         set_clauses.push("due_date = ?".to_string());
@@ -160,7 +174,7 @@ pub fn update_task(input: UpdateTaskInput, db: State<Database>) -> Result<Task, 
 
     let task = conn
         .query_row(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at \
+            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
              FROM tasks WHERE id = ?",
             rusqlite::params![input.id],
             map_row,
@@ -191,7 +205,7 @@ pub fn move_task(input: MoveTaskInput, db: State<Database>) -> Result<Task, Stri
 
     let task = conn
         .query_row(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at \
+            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
              FROM tasks WHERE id = ?",
             rusqlite::params![input.id],
             map_row,
@@ -217,7 +231,7 @@ pub fn get_archived_tasks(db: State<Database>) -> Result<Vec<Task>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at \
+            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
              FROM tasks WHERE archived = 1 ORDER BY updated_at DESC",
         )
         .map_err(|e| e.to_string())?;
@@ -250,7 +264,7 @@ pub fn restore_task(id: i64, db: State<Database>) -> Result<Task, String> {
 
     let task = conn
         .query_row(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at \
+            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
              FROM tasks WHERE id = ?",
             rusqlite::params![id],
             map_row,
@@ -266,4 +280,102 @@ pub fn delete_task(id: i64, db: State<Database>) -> Result<(), String> {
     conn.execute("DELETE FROM tasks WHERE id = ?", rusqlite::params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn export_tasks(db: State<Database>) -> Result<String, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
+             FROM tasks ORDER BY status, position ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let tasks = stmt
+        .query_map([], map_row)
+        .map_err(|e| e.to_string())?
+        .collect::<rusqlite::Result<Vec<Task>>>()
+        .map_err(|e| e.to_string())?;
+
+    serde_json::to_string_pretty(&tasks).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn import_tasks(db: State<Database>, json_data: String) -> Result<(), String> {
+    let tasks: Vec<Task> = serde_json::from_str(&json_data).map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    conn.execute("DELETE FROM tasks", []).map_err(|e| e.to_string())?;
+
+    for task in tasks {
+        conn.execute(
+            "INSERT INTO tasks (title, description, status, priority, due_date, position, archived, created_at, updated_at, label) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                task.title,
+                task.description,
+                task.status,
+                task.priority,
+                task.due_date,
+                task.position,
+                task.archived as i64,
+                task.created_at,
+                task.updated_at,
+                task.label
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_stats(db: State<Database>) -> Result<serde_json::Value, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // This month's submitted count
+    let this_month_submitted: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE status = 'submitted' AND created_at >= date('now', 'start of month')",
+        [], |row| row.get(0)
+    ).map_err(|e| e.to_string())?;
+
+    // Total active tasks
+    let total_active: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE archived = 0",
+        [], |row| row.get(0)
+    ).map_err(|e| e.to_string())?;
+
+    // Total archived
+    let total_archived: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE archived = 1",
+        [], |row| row.get(0)
+    ).map_err(|e| e.to_string())?;
+
+    // Overdue count
+    let overdue: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE archived = 0 AND due_date IS NOT NULL AND due_date < date('now')",
+        [], |row| row.get(0)
+    ).map_err(|e| e.to_string())?;
+
+    // By priority counts
+    let by_priority_sql = "SELECT priority, COUNT(*) FROM tasks WHERE archived = 0 GROUP BY priority";
+    let mut stmt = conn.prepare(by_priority_sql).map_err(|e| e.to_string())?;
+    let priority_rows: Vec<(String, i64)> = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    }).map_err(|e| e.to_string())?.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+
+    let mut priority_map = serde_json::Map::new();
+    for (p, c) in priority_rows {
+        priority_map.insert(p, serde_json::Value::Number(c.into()));
+    }
+
+    Ok(serde_json::json!({
+        "this_month_submitted": this_month_submitted,
+        "total_active": total_active,
+        "total_archived": total_archived,
+        "overdue": overdue,
+        "by_priority": priority_map,
+    }))
 }

@@ -25,4 +25,13 @@ export const api = {
 
   deleteTask: (id: number) =>
     invoke<void>("delete_task", { id }),
+
+  exportTasks: () =>
+    invoke<string>("export_tasks"),
+
+  importTasks: (jsonData: string) =>
+    invoke<void>("import_tasks", { jsonData }),
+
+  getStats: () =>
+    invoke<{ this_month_submitted: number; total_active: number; total_archived: number; overdue: number; by_priority: Record<string, number> }>("get_stats"),
 };
