@@ -14,6 +14,8 @@ export interface Task {
   created_at: string;
   updated_at: string;
   label: string;
+  start_time: string | null;
+  end_time: string | null;
 }
 
 export interface CreateTaskInput {
@@ -22,6 +24,8 @@ export interface CreateTaskInput {
   priority?: Priority;
   due_date?: string;
   label?: string;
+  start_time?: string;
+  end_time?: string;
 }
 
 export interface UpdateTaskInput {
@@ -31,6 +35,8 @@ export interface UpdateTaskInput {
   priority?: Priority;
   due_date?: string;
   label?: string;
+  start_time?: string;
+  end_time?: string;
 }
 
 export interface MoveTaskInput {

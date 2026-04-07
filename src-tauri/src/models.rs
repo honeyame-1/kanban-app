@@ -13,6 +13,8 @@ pub struct Task {
     pub created_at: String,
     pub updated_at: String,
     pub label: String,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -22,6 +24,8 @@ pub struct CreateTaskInput {
     pub priority: Option<String>,
     pub due_date: Option<String>,
     pub label: Option<String>,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -32,6 +36,8 @@ pub struct UpdateTaskInput {
     pub priority: Option<String>,
     pub due_date: Option<String>,
     pub label: Option<String>,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

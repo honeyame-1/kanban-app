@@ -56,7 +56,16 @@ export function TaskCard({ task, onClick, onArchive, onDuplicate }: TaskCardProp
             </span>
           )}
         </div>
-        {dueLabel && <span className={dueLabel.className}>{dueLabel.text}</span>}
+        {dueLabel && (
+          <span className={dueLabel.className}>
+            {dueLabel.text}
+            {task.start_time && (
+              <span className="ml-1 text-slate-500">
+                {task.start_time}{task.end_time ? `~${task.end_time}` : ""}
+              </span>
+            )}
+          </span>
+        )}
       </div>
       {task.description && (
         <div className="text-xs text-slate-500 mt-1.5 line-clamp-2">{task.description}</div>

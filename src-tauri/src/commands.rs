@@ -6,7 +6,7 @@ use crate::models::{Attachment, ChecklistItem, CreateRecurringInput, CreateTaskI
 
 /// Shared SELECT column list for the `tasks` table — keeps all queries in sync.
 const TASK_COLS: &str =
-    "id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label";
+    "id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label, start_time, end_time";
 
 /// Shared SELECT column list for the `recurring_tasks` table.
 const RECURRING_COLS: &str =
@@ -25,6 +25,8 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
         label: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
+        start_time: row.get(11)?,
+        end_time: row.get(12)?,
     })
 }
 
@@ -117,9 +119,9 @@ pub fn create_task(input: CreateTaskInput, db: State<Database>) -> Result<Task, 
     let label = input.label.unwrap_or_default();
 
     conn.execute(
-        "INSERT INTO tasks (title, description, status, priority, due_date, position, archived, created_at, updated_at, label) \
-         VALUES (?, ?, 'todo', ?, ?, 0, 0, datetime('now'), datetime('now'), ?)",
-        rusqlite::params![input.title, description, priority, input.due_date, label],
+        "INSERT INTO tasks (title, description, status, priority, due_date, position, archived, created_at, updated_at, label, start_time, end_time) \
+         VALUES (?, ?, 'todo', ?, ?, 0, 0, datetime('now'), datetime('now'), ?, ?, ?)",
+        rusqlite::params![input.title, description, priority, input.due_date, label, input.start_time, input.end_time],
     )
     .map_err(|e| e.to_string())?;
 
@@ -165,6 +167,16 @@ pub fn update_task(input: UpdateTaskInput, db: State<Database>) -> Result<Task, 
     if input.due_date.is_some() {
         set_clauses.push("due_date = ?".to_string());
         params.push(Box::new(input.due_date.clone()));
+    }
+
+    if input.start_time.is_some() {
+        set_clauses.push("start_time = ?".to_string());
+        params.push(Box::new(input.start_time.clone()));
+    }
+
+    if input.end_time.is_some() {
+        set_clauses.push("end_time = ?".to_string());
+        params.push(Box::new(input.end_time.clone()));
     }
 
     params.push(Box::new(input.id));
@@ -312,8 +324,8 @@ pub fn import_tasks(db: State<Database>, json_data: String) -> Result<(), String
 
     for task in tasks {
         conn.execute(
-            "INSERT INTO tasks (title, description, status, priority, due_date, position, archived, created_at, updated_at, label) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO tasks (title, description, status, priority, due_date, position, archived, created_at, updated_at, label, start_time, end_time) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             rusqlite::params![
                 task.title,
                 task.description,
@@ -324,7 +336,9 @@ pub fn import_tasks(db: State<Database>, json_data: String) -> Result<(), String
                 task.archived as i64,
                 task.created_at,
                 task.updated_at,
-                task.label
+                task.label,
+                task.start_time,
+                task.end_time
             ],
         )
         .map_err(|e| {

@@ -83,7 +83,7 @@ function App() {
         onArchive={taskStore.archiveTask}
         onDuplicate={taskStore.duplicateTask}
       />
-      <StatusBar tasks={taskStore.tasks} urgentCount={taskStore.urgentCount} />
+      <StatusBar tasks={taskStore.tasks} urgentCount={taskStore.urgentCount} urgentTasks={taskStore.urgentTasks} />
 
       {showModal && (
         <TaskModal

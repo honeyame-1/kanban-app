@@ -5,8 +5,8 @@ import type { Priority, ChecklistItem, Attachment } from "../types";
 import { api } from "../api";
 
 interface TaskModalProps {
-  task: { id?: number; title: string; description: string; priority: string; due_date: string | null; label?: string } | null;
-  onSave: (input: { title: string; description?: string; priority?: Priority; due_date?: string; label?: string }) => void;
+  task: { id?: number; title: string; description: string; priority: string; due_date: string | null; label?: string; start_time?: string | null; end_time?: string | null } | null;
+  onSave: (input: { title: string; description?: string; priority?: Priority; due_date?: string; label?: string; start_time?: string; end_time?: string }) => void;
   onClose: () => void;
 }
 
@@ -16,6 +16,8 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
   const [priority, setPriority] = useState<Priority>((task?.priority as Priority) || "normal");
   const [dueDate, setDueDate] = useState(task?.due_date || "");
   const [label, setLabel] = useState(task?.label || "");
+  const [startTime, setStartTime] = useState(task?.start_time || "");
+  const [endTime, setEndTime] = useState(task?.end_time || "");
   const [checkItems, setCheckItems] = useState<ChecklistItem[]>([]);
   const [newItemText, setNewItemText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -63,6 +65,8 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
       priority,
       due_date: dueDate || undefined,
       label: label || undefined,
+      start_time: startTime || undefined,
+      end_time: endTime || undefined,
     });
   };
 
@@ -138,6 +142,27 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
           onChange={(e) => setDueDate(e.target.value)}
           className="w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500/50 mb-3"
         />
+
+        <div className="flex gap-2 mb-3">
+          <div className="flex-1">
+            <label className="block text-xs text-slate-400 mb-1">시작 시간</label>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500/50"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-slate-400 mb-1">종료 시간</label>
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500/50"
+            />
+          </div>
+        </div>
 
         <label className="block text-xs text-slate-400 mb-1">메모</label>
         <textarea

@@ -39,6 +39,16 @@ impl Database {
         let migration6 = include_str!("../migrations/006_add_indexes.sql");
         conn.execute_batch(migration6)?;
 
+        // Migration 007: add start_time and end_time columns (idempotent)
+        let has_start_time: bool = conn
+            .prepare("PRAGMA table_info(tasks)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .any(|col| col.as_deref() == Ok("start_time"));
+        if !has_start_time {
+            let migration7 = include_str!("../migrations/007_add_time_fields.sql");
+            conn.execute_batch(migration7)?;
+        }
+
         Ok(Database {
             conn: Mutex::new(conn),
         })

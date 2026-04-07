@@ -54,6 +54,8 @@ export function useTasks() {
       priority: task.priority,
       due_date: task.due_date || undefined,
       label: task.label || undefined,
+      start_time: task.start_time || undefined,
+      end_time: task.end_time || undefined,
     });
     await fetchTasks();
   };
@@ -77,11 +79,12 @@ export function useTasks() {
   const getTasksByStatus = (status: Status) =>
     tasks.filter((t) => t.status === status).sort((a, b) => a.position - b.position);
 
-  const urgentCount = tasks.filter((t) => {
+  const urgentTasks = tasks.filter((t) => {
     if (!t.due_date) return false;
     const diff = Math.ceil((new Date(t.due_date).getTime() - Date.now()) / 86400000);
     return diff <= 1;
-  }).length;
+  });
+  const urgentCount = urgentTasks.length;
 
   return {
     tasks,
@@ -89,6 +92,7 @@ export function useTasks() {
     filter,
     loading,
     urgentCount,
+    urgentTasks,
     setFilter,
     getTasksByStatus,
     createTask,
