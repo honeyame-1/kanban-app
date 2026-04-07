@@ -21,8 +21,8 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   useEffect(() => {
-    if (task && 'id' in task) {
-      const taskId = task!.id!;
+    if (task && task.id !== undefined) {
+      const taskId = task.id;
       api.getChecklist(taskId).then(setCheckItems);
       api.getAttachments(taskId).then(setAttachments);
     }
@@ -45,7 +45,8 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
     });
     if (!result) return;
     const paths = Array.isArray(result) ? result : [result];
-    const taskId = task!.id!;
+    const taskId = task?.id;
+    if (taskId === undefined) return;
     for (const filePath of paths) {
       const fileName = filePath.split(/[\\/]/).pop() || filePath;
       const att = await api.addAttachment(taskId, fileName, filePath);
@@ -147,7 +148,7 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
           placeholder="메모 (선택)"
         />
 
-        {task && 'id' in task && (
+        {task && task.id !== undefined && (
           <div className="mb-4">
             <label className="block text-xs text-slate-400 mb-2">체크리스트</label>
             <div className="space-y-1">
@@ -182,9 +183,9 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
               value={newItemText}
               onChange={(e) => setNewItemText(e.target.value)}
               onKeyDown={async (e) => {
-                if (e.key === "Enter" && newItemText.trim()) {
+                if (e.key === "Enter" && newItemText.trim() && task?.id !== undefined) {
                   e.preventDefault();
-                  const item = await api.addChecklistItem(task!.id!, newItemText.trim());
+                  const item = await api.addChecklistItem(task.id, newItemText.trim());
                   setCheckItems(prev => [...prev, item]);
                   setNewItemText("");
                 }
@@ -195,7 +196,7 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
           </div>
         )}
 
-        {task && 'id' in task && (
+        {task && task.id !== undefined && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <label className="block text-xs text-slate-400">첨부파일</label>

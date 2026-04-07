@@ -12,7 +12,7 @@ export const api = {
     invoke<Task>("update_task", { input }),
 
   moveTask: (input: MoveTaskInput) =>
-    invoke<void>("move_task", { input }),
+    invoke<Task>("move_task", { input }),
 
   archiveTask: (id: number) =>
     invoke<void>("archive_task", { id }),
@@ -21,7 +21,7 @@ export const api = {
     invoke<Task[]>("get_archived_tasks"),
 
   restoreTask: (id: number) =>
-    invoke<void>("restore_task", { id }),
+    invoke<Task>("restore_task", { id }),
 
   deleteTask: (id: number) =>
     invoke<void>("delete_task", { id }),

@@ -36,6 +36,9 @@ impl Database {
         let migration5 = include_str!("../migrations/005_create_recurring.sql");
         conn.execute_batch(migration5)?;
 
+        let migration6 = include_str!("../migrations/006_add_indexes.sql");
+        conn.execute_batch(migration6)?;
+
         Ok(Database {
             conn: Mutex::new(conn),
         })

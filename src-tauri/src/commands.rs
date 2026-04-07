@@ -4,6 +4,14 @@ use tauri::State;
 use crate::db::Database;
 use crate::models::{Attachment, ChecklistItem, CreateRecurringInput, CreateTaskInput, GetTasksFilter, MoveTaskInput, RecurringTask, Task, UpdateTaskInput};
 
+/// Shared SELECT column list for the `tasks` table — keeps all queries in sync.
+const TASK_COLS: &str =
+    "id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label";
+
+/// Shared SELECT column list for the `recurring_tasks` table.
+const RECURRING_COLS: &str =
+    "id, title, description, priority, label, recurrence, day_of_week, day_of_month, auto_due_days, enabled, last_generated";
+
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
     Ok(Task {
         id: row.get(0)?,
@@ -78,8 +86,7 @@ pub fn get_tasks(filter: GetTasksFilter, db: State<Database>) -> Result<Vec<Task
 
     let where_clause = conditions.join(" AND ");
     let sql = format!(
-        "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
-         FROM tasks WHERE {} ORDER BY status, position ASC",
+        "SELECT {TASK_COLS} FROM tasks WHERE {} ORDER BY status, position ASC",
         where_clause
     );
 
@@ -119,8 +126,7 @@ pub fn create_task(input: CreateTaskInput, db: State<Database>) -> Result<Task, 
     let id = conn.last_insert_rowid();
     let task = conn
         .query_row(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
-             FROM tasks WHERE id = ?",
+            &format!("SELECT {TASK_COLS} FROM tasks WHERE id = ?"),
             rusqlite::params![id],
             map_row,
         )
@@ -174,8 +180,7 @@ pub fn update_task(input: UpdateTaskInput, db: State<Database>) -> Result<Task, 
 
     let task = conn
         .query_row(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
-             FROM tasks WHERE id = ?",
+            &format!("SELECT {TASK_COLS} FROM tasks WHERE id = ?"),
             rusqlite::params![input.id],
             map_row,
         )
@@ -205,8 +210,7 @@ pub fn move_task(input: MoveTaskInput, db: State<Database>) -> Result<Task, Stri
 
     let task = conn
         .query_row(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
-             FROM tasks WHERE id = ?",
+            &format!("SELECT {TASK_COLS} FROM tasks WHERE id = ?"),
             rusqlite::params![input.id],
             map_row,
         )
@@ -230,10 +234,9 @@ pub fn archive_task(id: i64, db: State<Database>) -> Result<(), String> {
 pub fn get_archived_tasks(db: State<Database>) -> Result<Vec<Task>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
-             FROM tasks WHERE archived = 1 ORDER BY updated_at DESC",
-        )
+        .prepare(&format!(
+            "SELECT {TASK_COLS} FROM tasks WHERE archived = 1 ORDER BY updated_at DESC"
+        ))
         .map_err(|e| e.to_string())?;
 
     let tasks = stmt
@@ -264,8 +267,7 @@ pub fn restore_task(id: i64, db: State<Database>) -> Result<Task, String> {
 
     let task = conn
         .query_row(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
-             FROM tasks WHERE id = ?",
+            &format!("SELECT {TASK_COLS} FROM tasks WHERE id = ?"),
             rusqlite::params![id],
             map_row,
         )
@@ -286,10 +288,9 @@ pub fn delete_task(id: i64, db: State<Database>) -> Result<(), String> {
 pub fn export_tasks(db: State<Database>) -> Result<String, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare(
-            "SELECT id, title, description, status, priority, due_date, position, archived, created_at, updated_at, label \
-             FROM tasks ORDER BY status, position ASC",
-        )
+        .prepare(&format!(
+            "SELECT {TASK_COLS} FROM tasks ORDER BY status, position ASC"
+        ))
         .map_err(|e| e.to_string())?;
 
     let tasks = stmt
@@ -526,7 +527,7 @@ fn map_recurring_row(row: &rusqlite::Row) -> rusqlite::Result<RecurringTask> {
 pub fn get_recurring_tasks(db: State<Database>) -> Result<Vec<RecurringTask>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
-        "SELECT id, title, description, priority, label, recurrence, day_of_week, day_of_month, auto_due_days, enabled, last_generated FROM recurring_tasks ORDER BY id ASC"
+        &format!("SELECT {RECURRING_COLS} FROM recurring_tasks ORDER BY id ASC")
     ).map_err(|e| e.to_string())?;
     let items = stmt.query_map([], map_recurring_row)
         .map_err(|e| e.to_string())?
@@ -553,7 +554,7 @@ pub fn create_recurring_task(input: CreateRecurringInput, db: State<Database>) -
     ).map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
     let task = conn.query_row(
-        "SELECT id, title, description, priority, label, recurrence, day_of_week, day_of_month, auto_due_days, enabled, last_generated FROM recurring_tasks WHERE id = ?",
+        &format!("SELECT {RECURRING_COLS} FROM recurring_tasks WHERE id = ?"),
         rusqlite::params![id], map_recurring_row,
     ).map_err(|e| e.to_string())?;
     Ok(task)
@@ -584,7 +585,7 @@ pub fn generate_recurring_tasks(db: State<Database>) -> Result<i64, String> {
     let weekday = chrono::Local::now().weekday().num_days_from_monday() as i64; // 0=Mon..6=Sun
 
     let mut stmt = conn.prepare(
-        "SELECT id, title, description, priority, label, recurrence, day_of_week, day_of_month, auto_due_days, enabled, last_generated FROM recurring_tasks WHERE enabled = 1"
+        &format!("SELECT {RECURRING_COLS} FROM recurring_tasks WHERE enabled = 1")
     ).map_err(|e| e.to_string())?;
 
     let recurrings: Vec<RecurringTask> = stmt.query_map([], map_recurring_row)
