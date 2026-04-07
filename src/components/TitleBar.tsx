@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { isEnabled, enable, disable } from "@tauri-apps/plugin-autostart";
 
 interface TitleBarProps {
   onArchiveClick: () => void;
@@ -24,12 +25,28 @@ function formatDateTime(date: Date): string {
 
 export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme, onToggleTheme, onBackup, onRestore }: TitleBarProps) {
   const [now, setNow] = useState(new Date());
+  const [autoStart, setAutoStart] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
+    isEnabled().then(setAutoStart).catch(() => {});
     return () => clearInterval(timer);
   }, []);
+
+  const toggleAutoStart = async () => {
+    try {
+      if (autoStart) {
+        await disable();
+        setAutoStart(false);
+      } else {
+        await enable();
+        setAutoStart(true);
+      }
+    } catch (err) {
+      console.error("자동시작 설정 실패:", err);
+    }
+  };
 
   const handleRestoreClick = () => {
     fileInputRef.current?.click();
@@ -57,6 +74,12 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
         <span className="text-sm text-slate-500">{formatDateTime(now)}</span>
       </div>
       <div className="flex items-center gap-2">
+        <button
+          onClick={toggleAutoStart}
+          className={`text-xs border rounded-md px-3 py-1.5 transition-colors ${autoStart ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" : "text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border-white/[0.1]"}`}
+        >
+          {autoStart ? "🟢 자동시작" : "⚫ 자동시작"}
+        </button>
         <button
           onClick={onToggleTheme}
           className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
