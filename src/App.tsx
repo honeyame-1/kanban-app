@@ -12,6 +12,7 @@ import type { Task } from "./types";
 
 function App() {
   const taskStore = useTasks();
+  const { theme, toggleTheme } = useTheme();
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [showArchive, setShowArchive] = useState(false);
@@ -40,14 +41,15 @@ function App() {
   });
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-[#0f0f1a] to-[#1a1a2e] text-slate-200 overflow-hidden">
-      <TitleBar onArchiveClick={handleArchiveClick} />
+    <div className={`h-screen flex flex-col overflow-hidden ${theme === "dark" ? "bg-gradient-to-br from-[#0f0f1a] to-[#1a1a2e] text-slate-200" : "bg-gradient-to-br from-[#f0f2f5] to-[#e8eaed] text-slate-800"}`}>
+      <TitleBar onArchiveClick={handleArchiveClick} theme={theme} onToggleTheme={toggleTheme} />
       <Toolbar filter={taskStore.filter} onFilterChange={taskStore.setFilter} onNewTask={handleNewTask} />
       <KanbanBoard
         getTasksByStatus={taskStore.getTasksByStatus}
         onMoveTask={(id, status, position) => taskStore.moveTask({ id, status, position })}
         onTaskClick={handleTaskClick}
         onArchive={taskStore.archiveTask}
+        onDuplicate={taskStore.duplicateTask}
       />
       <StatusBar tasks={taskStore.tasks} urgentCount={taskStore.urgentCount} />
 

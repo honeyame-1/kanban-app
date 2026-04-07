@@ -18,7 +18,7 @@ function formatDateTime(date: Date): string {
   return `${y}년 ${m}월 ${d}일 (${day})  ${h}:${min}`;
 }
 
-export function TitleBar({ onArchiveClick }: TitleBarProps) {
+export function TitleBar({ onArchiveClick, theme, onToggleTheme }: TitleBarProps) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -32,12 +32,20 @@ export function TitleBar({ onArchiveClick }: TitleBarProps) {
         <span className="text-sm text-slate-400 font-medium">업무 칸반</span>
         <span className="text-sm text-slate-500">{formatDateTime(now)}</span>
       </div>
-      <button
-        onClick={onArchiveClick}
-        className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
-      >
-        📦 아카이브
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onToggleTheme}
+          className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
+        >
+          {theme === "dark" ? "☀️" : "🌙"}
+        </button>
+        <button
+          onClick={onArchiveClick}
+          className="text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors"
+        >
+          📦 아카이브
+        </button>
+      </div>
     </div>
   );
 }
