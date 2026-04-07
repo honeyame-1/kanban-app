@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { PRIORITIES } from "../types";
+import { PRIORITIES, LABELS } from "../types";
 import type { Task } from "../types";
 
 interface TaskCardProps {
@@ -32,6 +32,7 @@ export function TaskCard({ task, onClick, onArchive, onDuplicate }: TaskCardProp
   };
 
   const priorityInfo = PRIORITIES.find((p) => p.key === task.priority);
+  const labelInfo = task.label ? LABELS.find((l) => l.key === task.label) : null;
   const dueLabel = getDueLabel(task.due_date);
 
   return (
@@ -45,9 +46,16 @@ export function TaskCard({ task, onClick, onArchive, onDuplicate }: TaskCardProp
     >
       <div className="text-sm font-medium text-slate-200 mb-2">{task.title}</div>
       <div className="flex items-center justify-between text-[11px]">
-        <span className={`rounded px-2 py-0.5 font-semibold ${priorityInfo?.color}`}>
-          {priorityInfo?.label}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`rounded px-2 py-0.5 font-semibold ${priorityInfo?.color}`}>
+            {priorityInfo?.label}
+          </span>
+          {labelInfo && (
+            <span className={`rounded px-2 py-0.5 font-semibold ${labelInfo.color}`}>
+              {labelInfo.label}
+            </span>
+          )}
+        </div>
         {dueLabel && <span className={dueLabel.className}>{dueLabel.text}</span>}
       </div>
       {task.description && (

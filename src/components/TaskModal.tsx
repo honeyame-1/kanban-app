@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { PRIORITIES } from "../types";
+import { PRIORITIES, LABELS } from "../types";
 import type { Priority } from "../types";
 
 interface TaskModalProps {
-  task: { title: string; description: string; priority: string; due_date: string | null } | null;
-  onSave: (input: { title: string; description?: string; priority?: Priority; due_date?: string }) => void;
+  task: { title: string; description: string; priority: string; due_date: string | null; label?: string } | null;
+  onSave: (input: { title: string; description?: string; priority?: Priority; due_date?: string; label?: string }) => void;
   onClose: () => void;
 }
 
@@ -13,6 +13,7 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
   const [description, setDescription] = useState(task?.description || "");
   const [priority, setPriority] = useState<Priority>((task?.priority as Priority) || "normal");
   const [dueDate, setDueDate] = useState(task?.due_date || "");
+  const [label, setLabel] = useState(task?.label || "");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,6 +23,7 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
       description: description.trim() || undefined,
       priority,
       due_date: dueDate || undefined,
+      label: label || undefined,
     });
   };
 
@@ -57,6 +59,35 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
               }`}
             >
               {p.label}
+            </button>
+          ))}
+        </div>
+
+        <label className="block text-xs text-slate-400 mb-1">라벨</label>
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => setLabel("")}
+            className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+              label === ""
+                ? "bg-white/[0.1] border-white/[0.3] text-slate-200"
+                : "border-white/[0.1] text-slate-400 hover:border-white/[0.2]"
+            }`}
+          >
+            없음
+          </button>
+          {LABELS.map((l) => (
+            <button
+              key={l.key}
+              type="button"
+              onClick={() => setLabel(l.key)}
+              className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                label === l.key
+                  ? `${l.color} border-current`
+                  : "border-white/[0.1] text-slate-400 hover:border-white/[0.2]"
+              }`}
+            >
+              {l.label}
             </button>
           ))}
         </div>

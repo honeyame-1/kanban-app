@@ -13,6 +13,7 @@ export interface Task {
   archived: boolean;
   created_at: string;
   updated_at: string;
+  label: string;
 }
 
 export interface CreateTaskInput {
@@ -20,6 +21,7 @@ export interface CreateTaskInput {
   description?: string;
   priority?: Priority;
   due_date?: string;
+  label?: string;
 }
 
 export interface UpdateTaskInput {
@@ -28,6 +30,7 @@ export interface UpdateTaskInput {
   description?: string;
   priority?: Priority;
   due_date?: string;
+  label?: string;
 }
 
 export interface MoveTaskInput {
@@ -41,6 +44,7 @@ export interface GetTasksFilter {
   priority?: Priority;
   due_filter?: DueFilter;
   due_date_until?: string;
+  label?: string;
 }
 
 export const COLUMNS: { key: Status; label: string; icon: string }[] = [
@@ -54,4 +58,14 @@ export const PRIORITIES: { key: Priority; label: string; color: string }[] = [
   { key: "high", label: "높음", color: "bg-orange-500/20 text-orange-400" },
   { key: "normal", label: "보통", color: "bg-emerald-500/20 text-emerald-400" },
   { key: "low", label: "낮음", color: "bg-slate-500/20 text-slate-400" },
+];
+
+export const LABELS: { key: string; label: string; color: string }[] = [
+  { key: "보고서", label: "보고서", color: "bg-blue-500/20 text-blue-400" },
+  { key: "점검", label: "점검", color: "bg-green-500/20 text-green-400" },
+  { key: "품의", label: "품의", color: "bg-purple-500/20 text-purple-400" },
+  { key: "가전표", label: "가전표", color: "bg-amber-500/20 text-amber-400" },
+  { key: "결재", label: "결재", color: "bg-pink-500/20 text-pink-400" },
+  { key: "교육이수", label: "교육이수", color: "bg-cyan-500/20 text-cyan-400" },
+  { key: "기타", label: "기타", color: "bg-slate-500/20 text-slate-400" },
 ];

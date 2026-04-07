@@ -12,6 +12,7 @@ pub struct Task {
     pub archived: bool,
     pub created_at: String,
     pub updated_at: String,
+    pub label: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -20,6 +21,7 @@ pub struct CreateTaskInput {
     pub description: Option<String>,
     pub priority: Option<String>,
     pub due_date: Option<String>,
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -29,6 +31,7 @@ pub struct UpdateTaskInput {
     pub description: Option<String>,
     pub priority: Option<String>,
     pub due_date: Option<String>,
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -44,4 +47,5 @@ pub struct GetTasksFilter {
     pub priority: Option<String>,
     pub due_filter: Option<String>,
     pub due_date_until: Option<String>,
+    pub label: Option<String>,
 }

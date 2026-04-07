@@ -17,6 +17,9 @@ impl Database {
         let migration = include_str!("../migrations/001_create_tasks.sql");
         conn.execute_batch(migration)?;
 
+        let migration2 = include_str!("../migrations/002_add_label.sql");
+        conn.execute_batch(migration2)?;
+
         Ok(Database {
             conn: Mutex::new(conn),
         })

@@ -1,4 +1,4 @@
-import { PRIORITIES } from "../types";
+import { PRIORITIES, LABELS } from "../types";
 import type { GetTasksFilter, Priority } from "../types";
 
 interface ToolbarProps {
@@ -28,6 +28,16 @@ export function Toolbar({ filter, onFilterChange, onNewTask }: ToolbarProps) {
           <option value="">우선순위 전체</option>
           {PRIORITIES.map((p) => (
             <option key={p.key} value={p.key}>{p.label}</option>
+          ))}
+        </select>
+        <select
+          value={filter.label || ""}
+          onChange={(e) => onFilterChange({ ...filter, label: e.target.value || undefined })}
+          className="bg-white/[0.06] border border-white/[0.1] rounded-md px-3 py-2 text-xs text-slate-300 outline-none"
+        >
+          <option value="">라벨 전체</option>
+          {LABELS.map((l) => (
+            <option key={l.key} value={l.key}>{l.label}</option>
           ))}
         </select>
         <select
