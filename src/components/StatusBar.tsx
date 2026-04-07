@@ -7,7 +7,7 @@ interface StatusBarProps {
   urgentTasks: Task[];
 }
 
-const LUNCH_MENUS = [
+const DEFAULT_LUNCH_MENUS = [
   // A구역 맛집 세트
   "황기순 칼국수 + 왕돈까스",
   "구면구면 메밀국수 + 훈제오리",
@@ -39,7 +39,7 @@ const LUNCH_MENUS = [
   // 국/탕 세트
   "갈비탕 + 깍두기",
   "설렁탕 + 깍두기 + 밥",
-  "순대국 + 순대 추가",
+  "순대국밥 + 순대 추가",
   "육개장 + 공기밥",
   "감자탕 + 볶음밥",
   "닭볶음탕 + 밥",
@@ -80,9 +80,28 @@ function getCheer(count: number): string {
   return `오늘 ${count}개 처리! 잘하고 있어요! 👍`;
 }
 
+function loadMenus(): string[] {
+  try {
+    const saved = localStorage.getItem("kanban-lunch-menus");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return [...DEFAULT_LUNCH_MENUS];
+}
+
 export function StatusBar({ tasks, urgentCount, urgentTasks }: StatusBarProps) {
   const [lunchOffset, setLunchOffset] = useState(0);
   const [showUrgent, setShowUrgent] = useState(false);
+  const [showMenuEditor, setShowMenuEditor] = useState(false);
+  const [menus, setMenus] = useState<string[]>(loadMenus);
+  const [newMenu, setNewMenu] = useState("");
+
+  const saveMenus = (updated: string[]) => {
+    setMenus(updated);
+    localStorage.setItem("kanban-lunch-menus", JSON.stringify(updated));
+  };
 
   const todo = tasks.filter((t) => t.status === "todo").length;
   const inProgress = tasks.filter((t) => t.status === "in_progress").length;
@@ -96,20 +115,76 @@ export function StatusBar({ tasks, urgentCount, urgentTasks }: StatusBarProps) {
   const cheer = getCheer(todayCompleted);
 
   const todayIdx = new Date().getDate() + new Date().getMonth() * 31;
-  const todayMenu = LUNCH_MENUS[(todayIdx + lunchOffset) % LUNCH_MENUS.length];
+  const todayMenu = menus.length > 0 ? menus[(todayIdx + lunchOffset) % menus.length] : "메뉴를 추가하세요";
 
   return (
     <div className="flex items-center justify-between px-5 py-2 border-t border-white/[0.06] text-[15px] text-slate-500">
       <span>전체 {tasks.length}개 | 할일 {todo} · 진행중 {inProgress} · 제출완료 {submitted}</span>
       <div className="flex items-center gap-4">
-        <button
-          type="button"
-          onClick={() => setLunchOffset((prev) => prev + 1)}
-          className="text-slate-400 hover:text-slate-200 transition-colors cursor-pointer select-none"
-          title="클릭하면 다른 메뉴 추천"
-        >
-          🍽️ 오늘 점심: {todayMenu}
-        </button>
+        <div className="relative flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setLunchOffset((prev) => prev + 1)}
+            className="text-slate-400 hover:text-slate-200 transition-colors cursor-pointer select-none"
+            title="클릭하면 다른 메뉴 추천"
+          >
+            🍽️ 오늘 점심: {todayMenu}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowMenuEditor(!showMenuEditor)}
+            className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors"
+            title="메뉴 편집"
+          >
+            ✏️
+          </button>
+          {showMenuEditor && (
+            <div className="absolute bottom-full left-0 mb-2 glass rounded-lg p-4 min-w-[320px] max-h-[400px] shadow-lg z-50 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-slate-300">점심 메뉴 편집</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { saveMenus([...DEFAULT_LUNCH_MENUS]); }}
+                    className="text-[10px] text-slate-500 hover:text-slate-300"
+                  >
+                    초기화
+                  </button>
+                  <button onClick={() => setShowMenuEditor(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+                </div>
+              </div>
+              <div className="flex gap-1 mb-2">
+                <input
+                  value={newMenu}
+                  onChange={(e) => setNewMenu(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newMenu.trim()) {
+                      saveMenus([...menus, newMenu.trim()]);
+                      setNewMenu("");
+                    }
+                  }}
+                  placeholder="새 메뉴 추가 (Enter)"
+                  className="flex-1 bg-white/[0.06] border border-white/[0.1] rounded px-2 py-1 text-xs text-slate-300 outline-none"
+                />
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {menus.map((m, i) => (
+                  <div key={i} className="flex items-center justify-between py-0.5 group">
+                    <span className="text-xs text-slate-400">{m}</span>
+                    <button
+                      onClick={() => saveMenus(menus.filter((_, idx) => idx !== i))}
+                      className="text-[10px] text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="text-[10px] text-slate-600 mt-2 pt-1 border-t border-white/[0.05]">
+                총 {menus.length}개
+              </div>
+            </div>
+          )}
+        </div>
         {cheer && <span className="text-emerald-400">{cheer}</span>}
         {urgentCount > 0 && (
           <div className="relative">
