@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { isEnabled, enable, disable } from "@tauri-apps/plugin-autostart";
 
 interface TitleBarProps {
@@ -24,7 +24,6 @@ function formatDateTime(date: Date): string {
 }
 
 type MenuId = "autostart" | "theme" | "backup" | "restore" | "recurring" | "stats" | "archive";
-
 const DEFAULT_ORDER: MenuId[] = ["autostart", "theme", "backup", "restore", "recurring", "stats", "archive"];
 
 function loadOrder(): MenuId[] {
@@ -32,7 +31,6 @@ function loadOrder(): MenuId[] {
     const saved = localStorage.getItem("kanban-menu-order");
     if (saved) {
       const parsed = JSON.parse(saved) as MenuId[];
-      // Ensure all items present
       const all = new Set(DEFAULT_ORDER);
       const valid = parsed.filter(id => all.has(id));
       const missing = DEFAULT_ORDER.filter(id => !valid.includes(id));
@@ -46,8 +44,7 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
   const [now, setNow] = useState(new Date());
   const [autoStart, setAutoStart] = useState(false);
   const [menuOrder, setMenuOrder] = useState<MenuId[]>(loadOrder);
-  const [dragItem, setDragItem] = useState<MenuId | null>(null);
-  const [dragOver, setDragOver] = useState<MenuId | null>(null);
+  const [editing, setEditing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -56,56 +53,23 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
     return () => clearInterval(timer);
   }, []);
 
-  const saveOrder = useCallback((order: MenuId[]) => {
-    setMenuOrder(order);
-    localStorage.setItem("kanban-menu-order", JSON.stringify(order));
-  }, []);
-
-  const handleDragStart = (id: MenuId) => {
-    setDragItem(id);
-  };
-
-  const handleDragOver = (e: React.DragEvent, id: MenuId) => {
-    e.preventDefault();
-    if (dragItem && dragItem !== id) {
-      setDragOver(id);
-    }
-  };
-
-  const handleDrop = (targetId: MenuId) => {
-    if (!dragItem || dragItem === targetId) return;
+  const moveItem = (fromIdx: number, dir: -1 | 1) => {
+    const toIdx = fromIdx + dir;
+    if (toIdx < 0 || toIdx >= menuOrder.length) return;
     const newOrder = [...menuOrder];
-    const fromIdx = newOrder.indexOf(dragItem);
-    const toIdx = newOrder.indexOf(targetId);
-    newOrder.splice(fromIdx, 1);
-    newOrder.splice(toIdx, 0, dragItem);
-    saveOrder(newOrder);
-    setDragItem(null);
-    setDragOver(null);
-  };
-
-  const handleDragEnd = () => {
-    setDragItem(null);
-    setDragOver(null);
+    [newOrder[fromIdx], newOrder[toIdx]] = [newOrder[toIdx], newOrder[fromIdx]];
+    setMenuOrder(newOrder);
+    localStorage.setItem("kanban-menu-order", JSON.stringify(newOrder));
   };
 
   const toggleAutoStart = async () => {
     try {
-      if (autoStart) {
-        await disable();
-        setAutoStart(false);
-      } else {
-        await enable();
-        setAutoStart(true);
-      }
-    } catch (err) {
-      console.error("자동시작 설정 실패:", err);
-    }
+      if (autoStart) { await disable(); setAutoStart(false); }
+      else { await enable(); setAutoStart(true); }
+    } catch (err) { console.error("자동시작 설정 실패:", err); }
   };
 
-  const handleRestoreClick = () => {
-    fileInputRef.current?.click();
-  };
+  const handleRestoreClick = () => fileInputRef.current?.click();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -113,44 +77,22 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result;
-      if (typeof text === "string") {
-        onRestore(text);
-      }
+      if (typeof text === "string") onRestore(text);
     };
     reader.readAsText(file);
     e.target.value = "";
   };
 
-  const btnClass = "text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors cursor-grab active:cursor-grabbing";
+  const btnClass = "text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors";
 
-  const menuItems: Record<MenuId, React.ReactNode> = {
-    autostart: (
-      <button onClick={toggleAutoStart}
-        className={`text-xs border rounded-md px-3 py-1.5 transition-colors ${autoStart ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" : "text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border-white/[0.1]"}`}
-      >
-        {autoStart ? "🟢 자동시작" : "⚫ 자동시작"}
-      </button>
-    ),
-    theme: (
-      <button onClick={onToggleTheme} className={btnClass}>
-        {theme === "dark" ? "☀️" : "🌙"}
-      </button>
-    ),
-    backup: (
-      <button onClick={onBackup} className={btnClass}>💾 백업</button>
-    ),
-    restore: (
-      <button onClick={handleRestoreClick} className={btnClass}>📂 복원</button>
-    ),
-    recurring: (
-      <button onClick={onRecurringClick} className={btnClass}>🔁 반복</button>
-    ),
-    stats: (
-      <button onClick={onStatsClick} className={btnClass}>📊 통계</button>
-    ),
-    archive: (
-      <button onClick={onArchiveClick} className={btnClass}>📦 아카이브</button>
-    ),
+  const menuItems: Record<MenuId, { label: string; onClick: () => void; custom?: boolean }> = {
+    autostart: { label: autoStart ? "🟢 자동시작" : "⚫ 자동시작", onClick: toggleAutoStart, custom: true },
+    theme: { label: theme === "dark" ? "☀️" : "🌙", onClick: onToggleTheme },
+    backup: { label: "💾 백업", onClick: onBackup },
+    restore: { label: "📂 복원", onClick: handleRestoreClick },
+    recurring: { label: "🔁 반복", onClick: onRecurringClick },
+    stats: { label: "📊 통계", onClick: onStatsClick },
+    archive: { label: "📦 아카이브", onClick: onArchiveClick },
   };
 
   return (
@@ -160,27 +102,37 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
         <span className="text-sm text-slate-500">{formatDateTime(now)}</span>
       </div>
       <div className="flex items-center gap-2">
-        {menuOrder.map((id) => (
-          <div
-            key={id}
-            draggable
-            onDragStart={() => handleDragStart(id)}
-            onDragOver={(e) => handleDragOver(e, id)}
-            onDrop={() => handleDrop(id)}
-            onDragEnd={handleDragEnd}
-            className={`transition-transform ${dragOver === id ? "scale-110 opacity-70" : ""} ${dragItem === id ? "opacity-40" : ""}`}
-          >
-            {menuItems[id]}
-          </div>
-        ))}
+        {menuOrder.map((id, idx) => {
+          const item = menuItems[id];
+          return (
+            <div key={id} className="flex items-center gap-0.5">
+              {editing && (
+                <div className="flex flex-col mr-0.5">
+                  <button onClick={() => moveItem(idx, -1)} className="text-[8px] text-slate-600 hover:text-slate-300 leading-none">◀</button>
+                  <button onClick={() => moveItem(idx, 1)} className="text-[8px] text-slate-600 hover:text-slate-300 leading-none">▶</button>
+                </div>
+              )}
+              <button
+                onClick={editing ? undefined : item.onClick}
+                className={id === "autostart" && autoStart
+                  ? `text-xs border rounded-md px-3 py-1.5 transition-colors text-emerald-400 bg-emerald-500/10 border-emerald-500/30`
+                  : btnClass
+                }
+              >
+                {item.label}
+              </button>
+            </div>
+          );
+        })}
+        <button
+          onClick={() => setEditing(!editing)}
+          className={`text-xs rounded-md px-2 py-1.5 transition-colors ${editing ? "text-indigo-400 bg-indigo-500/10 border border-indigo-500/30" : "text-slate-600 hover:text-slate-400"}`}
+          title="메뉴 순서 편집"
+        >
+          ⚙
+        </button>
       </div>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json"
-        className="hidden"
-        onChange={handleFileChange}
-      />
+      <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
     </div>
   );
 }
