@@ -1,6 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { isEnabled, enable, disable } from "@tauri-apps/plugin-autostart";
-import { api } from "../api";
 
 interface TitleBarProps {
   onArchiveClick: () => void;
@@ -24,8 +22,8 @@ function formatDateTime(date: Date): string {
   return `${y}년 ${m}월 ${d}일 (${day})  ${h}:${min}`;
 }
 
-type MenuId = "autostart" | "theme" | "backup" | "restore" | "recurring" | "stats" | "archive";
-const DEFAULT_ORDER: MenuId[] = ["autostart", "theme", "backup", "restore", "recurring", "stats", "archive"];
+type MenuId = "theme" | "backup" | "restore" | "recurring" | "stats" | "archive";
+const DEFAULT_ORDER: MenuId[] = ["theme", "backup", "restore", "recurring", "stats", "archive"];
 
 function loadOrder(): MenuId[] {
   try {
@@ -64,7 +62,6 @@ function loadRegion(): { name: string; lat: number; lon: number } {
 
 export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme, onToggleTheme, onBackup, onRestore }: TitleBarProps) {
   const [now, setNow] = useState(new Date());
-  const [autoStart, setAutoStart] = useState(false);
   const [menuOrder, setMenuOrder] = useState<MenuId[]>(loadOrder);
   const [editing, setEditing] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -74,18 +71,31 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
-    isEnabled().then(setAutoStart).catch(() => {});
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    const fetchWeather = () => {
-      api.getWeather(region.lat, region.lon)
-        .then(w => setWeather({ temp: w.temp, desc: w.desc }))
-        .catch(() => {});
+    const fetchWeather = async () => {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${region.lat}&longitude=${region.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia/Seoul`;
+        const res = await fetch(url);
+        const body = await res.json();
+        const current = body.current;
+        const temp = Math.round(current.temperature_2m ?? 0);
+        const code = current.weather_code ?? 0;
+        const descMap: Record<number, string> = {
+          0: "맑음 ☀️", 1: "구름 조금 🌤️", 2: "구름 조금 🌤️", 3: "흐림 ☁️",
+          45: "안개 🌫️", 48: "안개 🌫️", 51: "이슬비 🌦️", 53: "이슬비 🌦️", 55: "이슬비 🌦️",
+          61: "비 🌧️", 63: "비 🌧️", 65: "비 🌧️", 66: "눈비 🌨️", 67: "눈비 🌨️",
+          71: "눈 ❄️", 73: "눈 ❄️", 75: "눈 ❄️", 77: "눈 ❄️",
+          80: "소나기 🌧️", 81: "소나기 🌧️", 82: "소나기 🌧️",
+          85: "눈보라 ❄️", 86: "눈보라 ❄️", 95: "뇌우 ⛈️", 96: "뇌우 ⛈️", 99: "뇌우 ⛈️",
+        };
+        setWeather({ temp: `${temp}°C`, desc: descMap[code] || "알 수 없음" });
+      } catch { /* ignore */ }
     };
     fetchWeather();
-    const timer = setInterval(fetchWeather, 1800000); // 30분마다
+    const timer = setInterval(fetchWeather, 1800000);
     return () => clearInterval(timer);
   }, [region]);
 
@@ -100,13 +110,6 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
   const saveOrder = (order: MenuId[]) => {
     setMenuOrder(order);
     localStorage.setItem("kanban-menu-order", JSON.stringify(order));
-  };
-
-  const toggleAutoStart = async () => {
-    try {
-      if (autoStart) { await disable(); setAutoStart(false); }
-      else { await enable(); setAutoStart(true); }
-    } catch (err) { console.error("자동시작 설정 실패:", err); }
   };
 
   const handleRestoreClick = () => fileInputRef.current?.click();
@@ -126,7 +129,6 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
   const btnClass = "text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors";
 
   const menuLabels: Record<MenuId, string> = {
-    autostart: autoStart ? "🟢 자동시작" : "⚫ 자동시작",
     theme: theme === "dark" ? "☀️" : "🌙",
     backup: "💾 백업",
     restore: "📂 복원",
@@ -136,7 +138,6 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
   };
 
   const menuActions: Record<MenuId, () => void> = {
-    autostart: toggleAutoStart,
     theme: onToggleTheme,
     backup: onBackup,
     restore: handleRestoreClick,
@@ -190,11 +191,7 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
           >
             <span
               onClick={editing ? undefined : menuActions[id]}
-              className={`inline-block select-none ${
-                id === "autostart" && autoStart
-                  ? "text-xs border rounded-md px-3 py-1.5 transition-colors text-emerald-400 bg-emerald-500/10 border-emerald-500/30 cursor-pointer"
-                  : `${btnClass} cursor-pointer`
-              } ${editing ? "pointer-events-none ring-1 ring-indigo-500/30 ring-offset-1 ring-offset-transparent" : ""}`}
+              className={`inline-block select-none ${btnClass} cursor-pointer ${editing ? "pointer-events-none ring-1 ring-indigo-500/30 ring-offset-1 ring-offset-transparent" : ""}`}
             >
               {menuLabels[id]}
             </span>
