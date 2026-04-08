@@ -57,7 +57,8 @@ export interface Attachment {
   id: number;
   task_id: number;
   file_name: string;
-  file_path: string;
+  file_type: string;
+  file_data?: Blob;
   created_at: string;
 }
 
