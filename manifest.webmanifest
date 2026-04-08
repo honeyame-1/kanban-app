@@ -1,0 +1,18 @@
+{
+  "name": "업무 칸반",
+  "short_name": "칸반",
+  "description": "개인 업무 관리 칸반 보드",
+  "theme_color": "#6366f1",
+  "background_color": "#0f0f1a",
+  "display": "standalone",
+  "start_url": "/kanban-app/",
+  "scope": "/kanban-app/",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
