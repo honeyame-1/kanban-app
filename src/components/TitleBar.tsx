@@ -219,10 +219,12 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
           <div
             key={id}
             data-menu-idx={idx}
+            draggable={false}
+            onDragStart={(e) => e.preventDefault()}
             onPointerDown={(e) => handlePointerDown(idx, e)}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            className={`${editing ? "cursor-grab active:cursor-grabbing touch-none" : ""} ${dragIdx === idx ? "opacity-30" : ""}`}
+            className={`${editing ? "cursor-grab active:cursor-grabbing touch-none select-none" : ""} ${dragIdx === idx ? "opacity-30" : ""}`}
           >
             <span
               onClick={editing ? undefined : menuActions[id]}
