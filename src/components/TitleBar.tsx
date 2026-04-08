@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 interface TitleBarProps {
   onArchiveClick: () => void;
@@ -107,10 +107,10 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
     }
   };
 
-  const saveOrder = (order: MenuId[]) => {
+  const saveOrder = useCallback((order: MenuId[]) => {
     setMenuOrder(order);
     localStorage.setItem("kanban-menu-order", JSON.stringify(order));
-  };
+  }, []);
 
   const handleRestoreClick = () => fileInputRef.current?.click();
 
@@ -125,6 +125,56 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
     reader.readAsText(file);
     e.target.value = "";
   };
+
+  // Pointer-based menu drag (HTML5 drag conflicts with DndContext)
+  const menuContainerRef = useRef<HTMLDivElement>(null);
+  const dragStartX = useRef(0);
+  const dragActive = useRef(false);
+  const dragIdxRef = useRef<number | null>(null);
+  const menuOrderRef = useRef(menuOrder);
+  menuOrderRef.current = menuOrder;
+
+  const handlePointerDown = useCallback((idx: number, e: React.PointerEvent) => {
+    if (!editing) return;
+    e.preventDefault();
+    setDragIdx(idx);
+    dragIdxRef.current = idx;
+    dragStartX.current = e.clientX;
+    dragActive.current = false;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [editing]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (dragIdxRef.current === null || !editing) return;
+    e.preventDefault();
+    if (!dragActive.current && Math.abs(e.clientX - dragStartX.current) > 4) {
+      dragActive.current = true;
+    }
+    if (!dragActive.current) return;
+
+    const container = menuContainerRef.current;
+    if (!container) return;
+    const children = Array.from(container.children).filter(c => c.hasAttribute('data-menu-idx'));
+    const currentIdx = dragIdxRef.current;
+    for (let i = 0; i < children.length; i++) {
+      const rect = children[i].getBoundingClientRect();
+      if (e.clientX >= rect.left && e.clientX <= rect.right && i !== currentIdx) {
+        const newOrder = [...menuOrderRef.current];
+        const [moved] = newOrder.splice(currentIdx, 1);
+        newOrder.splice(i, 0, moved);
+        saveOrder(newOrder);
+        setDragIdx(i);
+        dragIdxRef.current = i;
+        break;
+      }
+    }
+  }, [editing, saveOrder]);
+
+  const handlePointerUp = useCallback(() => {
+    setDragIdx(null);
+    dragIdxRef.current = null;
+    dragActive.current = false;
+  }, []);
 
   const btnClass = "text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors";
 
@@ -164,30 +214,15 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
           </div>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div ref={menuContainerRef} className="flex items-center gap-2">
         {menuOrder.map((id, idx) => (
           <div
             key={id}
-            draggable={editing}
-            onDragStart={(e) => {
-              if (!editing) return;
-              setDragIdx(idx);
-              e.dataTransfer.effectAllowed = "move";
-            }}
-            onDragOver={(e) => {
-              if (!editing || dragIdx === null) return;
-              e.preventDefault();
-            }}
-            onDrop={() => {
-              if (!editing || dragIdx === null || dragIdx === idx) { setDragIdx(null); return; }
-              const newOrder = [...menuOrder];
-              const [moved] = newOrder.splice(dragIdx, 1);
-              newOrder.splice(idx, 0, moved);
-              saveOrder(newOrder);
-              setDragIdx(null);
-            }}
-            onDragEnd={() => setDragIdx(null)}
-            className={`${editing ? "cursor-grab active:cursor-grabbing" : ""} ${dragIdx === idx ? "opacity-30" : ""}`}
+            data-menu-idx={idx}
+            onPointerDown={(e) => handlePointerDown(idx, e)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            className={`${editing ? "cursor-grab active:cursor-grabbing touch-none" : ""} ${dragIdx === idx ? "opacity-30" : ""}`}
           >
             <span
               onClick={editing ? undefined : menuActions[id]}
