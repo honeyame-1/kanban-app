@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { useState, useEffect, useRef } from "react";
 import { PRIORITIES, LABELS } from "../types";
 import type { Priority, ChecklistItem, Attachment } from "../types";
 import { api } from "../api";
@@ -21,6 +20,7 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
   const [checkItems, setCheckItems] = useState<ChecklistItem[]>([]);
   const [newItemText, setNewItemText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (task && task.id !== undefined) {
@@ -40,20 +40,21 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
     return "📎";
   };
 
-  const handleAttach = async () => {
-    const result = await open({
-      multiple: true,
-      filters: [{ name: "All Files", extensions: ["*"] }],
-    });
-    if (!result) return;
-    const paths = Array.isArray(result) ? result : [result];
+  const handleAttach = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
     const taskId = task?.id;
     if (taskId === undefined) return;
-    for (const filePath of paths) {
-      const fileName = filePath.split(/[\\/]/).pop() || filePath;
-      const att = await api.addAttachment(taskId, fileName, filePath);
-      setAttachments(prev => [...prev, att]);
+
+    for (const file of Array.from(files)) {
+      const att = await api.addAttachment(taskId, file.name, file, file.type);
+      setAttachments((prev) => [...prev, att]);
     }
+    e.target.value = "";
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -244,9 +245,9 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
                     <span className="text-sm flex-shrink-0">{getFileIcon(att.file_name)}</span>
                     <button
                       type="button"
-                      onClick={() => api.openFile(att.file_path)}
+                      onClick={() => api.openAttachment(att.id)}
                       className="text-xs text-slate-300 hover:text-indigo-300 flex-1 text-left truncate transition-colors"
-                      title={att.file_path}
+                      title={att.file_name}
                     >
                       {att.file_name}
                     </button>
@@ -286,6 +287,13 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
             {task ? "수정" : "생성"}
           </button>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileSelected}
+        />
       </form>
     </div>
   );
