@@ -1,5 +1,6 @@
 export type Status = "todo" | "in_progress" | "submitted";
 export type Priority = "urgent" | "high" | "normal" | "low";
+export type Recurrence = "daily" | "weekly" | "monthly";
 export type DueFilter = "today" | "week" | "next_week" | "all";
 
 export interface Task {
@@ -66,9 +67,9 @@ export interface RecurringTask {
   id: number;
   title: string;
   description: string;
-  priority: string;
+  priority: Priority;
   label: string;
-  recurrence: string;
+  recurrence: Recurrence;
   day_of_week: number | null;
   day_of_month: number | null;
   auto_due_days: number;
@@ -79,9 +80,9 @@ export interface RecurringTask {
 export interface CreateRecurringInput {
   title: string;
   description?: string;
-  priority?: string;
+  priority?: Priority;
   label?: string;
-  recurrence: string;
+  recurrence: Recurrence;
   day_of_week?: number;
   day_of_month?: number;
   auto_due_days?: number;

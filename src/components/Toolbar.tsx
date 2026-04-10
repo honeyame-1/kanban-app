@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { PRIORITIES, LABELS } from "../types";
 import type { GetTasksFilter, Priority } from "../types";
 
@@ -8,14 +9,37 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ filter, onFilterChange, onNewTask }: ToolbarProps) {
+  // Local search state so typing doesn't refire the Dexie query on every keystroke.
+  const [searchInput, setSearchInput] = useState(filter.search || "");
+  const filterRef = useRef(filter);
+  filterRef.current = filter;
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const next = searchInput.trim() || undefined;
+      if (next !== filterRef.current.search) {
+        onFilterChange({ ...filterRef.current, search: next });
+      }
+    }, 180);
+    return () => clearTimeout(id);
+  }, [searchInput, onFilterChange]);
+
+  // Keep local input in sync if filter is reset externally.
+  useEffect(() => {
+    if ((filter.search || "") !== searchInput) {
+      setSearchInput(filter.search || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter.search]);
+
   return (
     <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
       <div className="flex items-center gap-3">
         <input
           type="text"
           placeholder="🔍 검색..."
-          value={filter.search || ""}
-          onChange={(e) => onFilterChange({ ...filter, search: e.target.value || undefined })}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           className="bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 w-56 outline-none focus:border-indigo-500/50"
         />
         <select

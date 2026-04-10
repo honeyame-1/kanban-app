@@ -23,11 +23,16 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (task && task.id !== undefined) {
-      const taskId = task.id;
-      api.getChecklist(taskId).then(setCheckItems);
-      api.getAttachments(taskId).then(setAttachments);
-    }
+    if (!task || task.id === undefined) return;
+    const taskId = task.id;
+    let cancelled = false;
+    api.getChecklist(taskId).then((items) => {
+      if (!cancelled) setCheckItems(items);
+    });
+    api.getAttachments(taskId).then((items) => {
+      if (!cancelled) setAttachments(items);
+    });
+    return () => { cancelled = true; };
   }, [task]);
 
   const getFileIcon = (fileName: string) => {

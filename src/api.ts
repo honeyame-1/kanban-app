@@ -9,20 +9,79 @@ import type {
   Attachment,
   RecurringTask,
   CreateRecurringInput,
+  Status,
+  Priority,
+  Recurrence,
 } from "./types";
 
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function localDateTime(d = new Date()): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function localDate(d = new Date()): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function now() {
-  return new Date().toISOString().replace("T", " ").slice(0, 19);
+  return localDateTime();
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return localDate();
 }
 
 function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + days);
+  return localDate(date);
+}
+
+// Shift positions of all active todo cards by +1, freeing slot 0.
+// Must be called inside a `db.tasks` rw-transaction.
+async function shiftTodoPositions(): Promise<void> {
+  const todos = await db.tasks
+    .where("status")
+    .equals("todo")
+    .and((t) => t.archived === 0)
+    .toArray();
+  await db.tasks.bulkUpdate(
+    todos.map((t) => ({ key: t.id!, changes: { position: t.position + 1 } }))
+  );
+}
+
+// File types that can execute scripts when opened via blob: URL — those would
+// run against this app's origin and read its IndexedDB. Open via download only.
+const UNSAFE_OPEN_EXTENSIONS = new Set([
+  "html", "htm", "xhtml", "xml", "svg", "svgz", "js", "mjs", "mhtml",
+]);
+const UNSAFE_OPEN_MIMES = [
+  "text/html",
+  "application/xhtml",
+  "application/xml",
+  "text/xml",
+  "image/svg",
+  "application/javascript",
+  "text/javascript",
+];
+function isUnsafeForInlineOpen(fileName: string, fileType: string): boolean {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  if (UNSAFE_OPEN_EXTENSIONS.has(ext)) return true;
+  const mime = (fileType || "").toLowerCase();
+  return UNSAFE_OPEN_MIMES.some((m) => mime.startsWith(m));
+}
+
+function isValidTaskRow(t: unknown): t is Record<string, unknown> {
+  if (!t || typeof t !== "object") return false;
+  const o = t as Record<string, unknown>;
+  return (
+    typeof o.title === "string" &&
+    typeof o.status === "string" &&
+    typeof o.priority === "string" &&
+    typeof o.position === "number"
+  );
 }
 
 export const api = {
@@ -87,32 +146,28 @@ export const api = {
   },
 
   createTask: async (input: CreateTaskInput): Promise<Task> => {
-    const todos = await db.tasks
-      .where("status")
-      .equals("todo")
-      .and((t) => t.archived === 0)
-      .toArray();
-    await Promise.all(
-      todos.map((t) => db.tasks.update(t.id!, { position: t.position + 1 }))
-    );
-
     const ts = now();
-    const id = await db.tasks.add({
-      title: input.title,
-      description: input.description || "",
-      status: "todo",
-      priority: input.priority || "normal",
-      due_date: input.due_date || null,
-      position: 0,
-      archived: 0,
-      created_at: ts,
-      updated_at: ts,
-      label: input.label || "",
-      start_time: input.start_time || null,
-      end_time: input.end_time || null,
+    const id = await db.transaction("rw", db.tasks, async () => {
+      await shiftTodoPositions();
+      return await db.tasks.add({
+        title: input.title,
+        description: input.description || "",
+        status: "todo",
+        priority: input.priority || "normal",
+        due_date: input.due_date || null,
+        position: 0,
+        archived: 0,
+        created_at: ts,
+        updated_at: ts,
+        label: input.label || "",
+        start_time: input.start_time || null,
+        end_time: input.end_time || null,
+      });
     });
 
-    return (await db.tasks.get(id)) as unknown as Task;
+    const row = await db.tasks.get(id);
+    if (!row) throw new Error("createTask: row missing after insert");
+    return { ...row, id: row.id!, archived: !!row.archived } as Task;
   },
 
   updateTask: async (input: UpdateTaskInput): Promise<Task> => {
@@ -127,26 +182,76 @@ export const api = {
     if (input.end_time !== undefined) changes.end_time = input.end_time || null;
 
     await db.tasks.update(input.id, changes);
-    return (await db.tasks.get(input.id)) as unknown as Task;
+    const row = await db.tasks.get(input.id);
+    if (!row) throw new Error(`updateTask: id ${input.id} not found`);
+    return { ...row, id: row.id!, archived: !!row.archived } as Task;
   },
 
   moveTask: async (input: MoveTaskInput): Promise<Task> => {
-    const targets = await db.tasks
-      .where("status")
-      .equals(input.status)
-      .and((t) => t.archived === 0 && t.position >= input.position && t.id !== input.id)
-      .toArray();
-    await Promise.all(
-      targets.map((t) => db.tasks.update(t.id!, { position: t.position + 1 }))
-    );
+    await db.transaction("rw", db.tasks, async () => {
+      const current = await db.tasks.get(input.id);
+      if (!current) throw new Error(`moveTask: id ${input.id} not found`);
 
-    await db.tasks.update(input.id, {
-      status: input.status,
-      position: input.position,
-      updated_at: now(),
+      const sameColumn = current.status === input.status;
+      const oldPosition = current.position;
+      const newPosition = input.position;
+
+      // Collect siblings (excluding the moved task) in target column.
+      const siblings = await db.tasks
+        .where("status")
+        .equals(input.status)
+        .and((t) => t.archived === 0 && t.id !== input.id)
+        .toArray();
+
+      const updates: { key: number; changes: { position: number } }[] = [];
+
+      if (sameColumn) {
+        // Reorder within the same column: shift the slice between old and new.
+        for (const s of siblings) {
+          if (oldPosition < newPosition) {
+            // moving down: shift items in (old, new] up by 1
+            if (s.position > oldPosition && s.position <= newPosition) {
+              updates.push({ key: s.id!, changes: { position: s.position - 1 } });
+            }
+          } else if (oldPosition > newPosition) {
+            // moving up: shift items in [new, old) down by 1
+            if (s.position >= newPosition && s.position < oldPosition) {
+              updates.push({ key: s.id!, changes: { position: s.position + 1 } });
+            }
+          }
+        }
+      } else {
+        // Cross-column: bump siblings at and after the new position.
+        for (const s of siblings) {
+          if (s.position >= newPosition) {
+            updates.push({ key: s.id!, changes: { position: s.position + 1 } });
+          }
+        }
+        // Also fill the gap left in the source column.
+        const sourceSiblings = await db.tasks
+          .where("status")
+          .equals(current.status)
+          .and((t) => t.archived === 0 && t.id !== input.id && t.position > oldPosition)
+          .toArray();
+        for (const s of sourceSiblings) {
+          updates.push({ key: s.id!, changes: { position: s.position - 1 } });
+        }
+      }
+
+      if (updates.length > 0) {
+        await db.tasks.bulkUpdate(updates);
+      }
+
+      await db.tasks.update(input.id, {
+        status: input.status,
+        position: newPosition,
+        updated_at: now(),
+      });
     });
 
-    return (await db.tasks.get(input.id)) as unknown as Task;
+    const row = await db.tasks.get(input.id);
+    if (!row) throw new Error(`moveTask: id ${input.id} missing after update`);
+    return { ...row, id: row.id!, archived: !!row.archived } as Task;
   },
 
   archiveTask: async (id: number): Promise<void> => {
@@ -159,33 +264,39 @@ export const api = {
       .equals(1)
       .reverse()
       .sortBy("updated_at");
-    return results as unknown as Task[];
+    return results.map((t) => ({
+      ...t,
+      id: t.id!,
+      archived: !!t.archived,
+    })) as Task[];
   },
 
   restoreTask: async (id: number): Promise<Task> => {
-    const todos = await db.tasks
-      .where("status")
-      .equals("todo")
-      .and((t) => t.archived === 0)
-      .toArray();
-    await Promise.all(
-      todos.map((t) => db.tasks.update(t.id!, { position: t.position + 1 }))
-    );
-
-    await db.tasks.update(id, {
-      archived: 0,
-      status: "todo",
-      position: 0,
-      updated_at: now(),
+    await db.transaction("rw", db.tasks, async () => {
+      await shiftTodoPositions();
+      await db.tasks.update(id, {
+        archived: 0,
+        status: "todo",
+        position: 0,
+        updated_at: now(),
+      });
     });
 
-    return (await db.tasks.get(id)) as unknown as Task;
+    const row = await db.tasks.get(id);
+    if (!row) throw new Error(`restoreTask: id ${id} not found`);
+    return { ...row, id: row.id!, archived: !!row.archived } as Task;
   },
 
   deleteTask: async (id: number): Promise<void> => {
-    await db.tasks.delete(id);
-    await db.checklist_items.where("task_id").equals(id).delete();
-    await db.attachments.where("task_id").equals(id).delete();
+    await db.transaction(
+      "rw",
+      [db.tasks, db.checklist_items, db.attachments],
+      async () => {
+        await db.tasks.delete(id);
+        await db.checklist_items.where("task_id").equals(id).delete();
+        await db.attachments.where("task_id").equals(id).delete();
+      }
+    );
   },
 
   exportTasks: async (): Promise<string> => {
@@ -194,9 +305,32 @@ export const api = {
   },
 
   importTasks: async (jsonData: string): Promise<void> => {
-    const tasks = JSON.parse(jsonData);
-    await db.tasks.clear();
-    await db.tasks.bulkAdd(tasks);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonData);
+    } catch {
+      throw new Error("백업 파일이 올바른 JSON 형식이 아닙니다.");
+    }
+    if (!Array.isArray(parsed) || !parsed.every(isValidTaskRow)) {
+      throw new Error("백업 파일 형식이 올바르지 않습니다.");
+    }
+    // Strip ids so Dexie autogenerates fresh ones (avoids collisions).
+    const rows = parsed.map((t) => {
+      const { id: _id, ...rest } = t as Record<string, unknown>;
+      return rest;
+    });
+
+    await db.transaction(
+      "rw",
+      [db.tasks, db.checklist_items, db.attachments],
+      async () => {
+        await db.checklist_items.clear();
+        await db.attachments.clear();
+        await db.tasks.clear();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await db.tasks.bulkAdd(rows as any);
+      }
+    );
   },
 
   getStats: async () => {
@@ -316,7 +450,15 @@ export const api = {
   openAttachment: async (id: number): Promise<void> => {
     const att = await db.attachments.get(id);
     if (!att) return;
-    const url = URL.createObjectURL(att.file_data);
+    // Blob URLs inherit the parent origin, so opening HTML/SVG/XML in a new
+    // tab would execute scripts against this app's IndexedDB. Force download
+    // for those types instead of window.open.
+    if (isUnsafeForInlineOpen(att.file_name, att.file_type)) {
+      await api.downloadAttachment(id);
+      return;
+    }
+    const blob = new Blob([att.file_data], { type: att.file_type || "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   },
@@ -324,12 +466,15 @@ export const api = {
   downloadAttachment: async (id: number): Promise<void> => {
     const att = await db.attachments.get(id);
     if (!att) return;
-    const url = URL.createObjectURL(att.file_data);
+    const blob = new Blob([att.file_data], { type: att.file_type || "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = att.file_name;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
 
   getRecurringTasks: async (): Promise<RecurringTask[]> => {
@@ -338,7 +483,7 @@ export const api = {
       ...r,
       id: r.id!,
       enabled: !!r.enabled,
-    })) as unknown as RecurringTask[];
+    })) as RecurringTask[];
   },
 
   createRecurringTask: async (
@@ -349,7 +494,7 @@ export const api = {
       description: input.description || "",
       priority: input.priority || "normal",
       label: input.label || "",
-      recurrence: input.recurrence as "daily" | "weekly" | "monthly",
+      recurrence: input.recurrence,
       day_of_week: input.day_of_week ?? null,
       day_of_month: input.day_of_month ?? null,
       auto_due_days: input.auto_due_days || 0,
@@ -357,7 +502,9 @@ export const api = {
       last_generated: null,
     });
 
-    return (await db.recurring_tasks.get(id)) as unknown as RecurringTask;
+    const row = await db.recurring_tasks.get(id);
+    if (!row) throw new Error("createRecurringTask: row missing after insert");
+    return { ...row, id: row.id!, enabled: !!row.enabled } as RecurringTask;
   },
 
   deleteRecurringTask: async (id: number): Promise<void> => {
@@ -400,69 +547,32 @@ export const api = {
 
       const dueDate =
         rt.auto_due_days > 0 ? addDays(todayStr, rt.auto_due_days) : null;
-
-      const todos = await db.tasks
-        .where("status")
-        .equals("todo")
-        .and((t) => t.archived === 0)
-        .toArray();
-      await Promise.all(
-        todos.map((t) =>
-          db.tasks.update(t.id!, { position: t.position + 1 })
-        )
-      );
-
       const ts = now();
-      await db.tasks.add({
-        title: rt.title,
-        description: rt.description,
-        status: "todo",
-        priority: rt.priority as "urgent" | "high" | "normal" | "low",
-        due_date: dueDate,
-        position: 0,
-        archived: 0,
-        created_at: ts,
-        updated_at: ts,
-        label: rt.label,
-        start_time: null,
-        end_time: null,
-      });
 
-      await db.recurring_tasks.update(rt.id!, { last_generated: todayStr });
+      await db.transaction("rw", [db.tasks, db.recurring_tasks], async () => {
+        await shiftTodoPositions();
+        await db.tasks.add({
+          title: rt.title,
+          description: rt.description,
+          status: "todo",
+          priority: rt.priority as Priority,
+          due_date: dueDate,
+          position: 0,
+          archived: 0,
+          created_at: ts,
+          updated_at: ts,
+          label: rt.label,
+          start_time: null,
+          end_time: null,
+        });
+        await db.recurring_tasks.update(rt.id!, { last_generated: todayStr });
+      });
       count++;
     }
 
     return count;
   },
-
-  getWeather: async (
-    lat: number,
-    lon: number
-  ): Promise<{ temp: string; humidity: string; wind: string; desc: string }> => {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia/Seoul`;
-    const res = await fetch(url);
-    const body = await res.json();
-
-    const current = body.current;
-    const temp = current.temperature_2m ?? 0;
-    const humidity = current.relative_humidity_2m ?? 0;
-    const wind = current.wind_speed_10m ?? 0;
-    const code = current.weather_code ?? 0;
-
-    const descMap: Record<number, string> = {
-      0: "맑음 ☀️", 1: "구름 조금 🌤️", 2: "구름 조금 🌤️", 3: "흐림 ☁️",
-      45: "안개 🌫️", 48: "안개 🌫️", 51: "이슬비 🌦️", 53: "이슬비 🌦️", 55: "이슬비 🌦️",
-      61: "비 🌧️", 63: "비 🌧️", 65: "비 🌧️", 66: "눈비 🌨️", 67: "눈비 🌨️",
-      71: "눈 ❄️", 73: "눈 ❄️", 75: "눈 ❄️", 77: "눈 ❄️",
-      80: "소나기 🌧️", 81: "소나기 🌧️", 82: "소나기 🌧️",
-      85: "눈보라 ❄️", 86: "눈보라 ❄️", 95: "뇌우 ⛈️", 96: "뇌우 ⛈️", 99: "뇌우 ⛈️",
-    };
-
-    return {
-      temp: `${Math.round(temp)}°C`,
-      humidity: `${Math.round(humidity)}%`,
-      wind: `${Math.round(wind)}m/s`,
-      desc: descMap[code] || "알 수 없음",
-    };
-  },
 };
+
+// Re-exported for type-only callers that previously imported from here.
+export type { Status, Priority, Recurrence };

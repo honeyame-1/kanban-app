@@ -75,28 +75,46 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    let timer: number | undefined;
+
+    const descMap: Record<number, string> = {
+      0: "맑음 ☀️", 1: "구름 조금 🌤️", 2: "구름 조금 🌤️", 3: "흐림 ☁️",
+      45: "안개 🌫️", 48: "안개 🌫️", 51: "이슬비 🌦️", 53: "이슬비 🌦️", 55: "이슬비 🌦️",
+      61: "비 🌧️", 63: "비 🌧️", 65: "비 🌧️", 66: "눈비 🌨️", 67: "눈비 🌨️",
+      71: "눈 ❄️", 73: "눈 ❄️", 75: "눈 ❄️", 77: "눈 ❄️",
+      80: "소나기 🌧️", 81: "소나기 🌧️", 82: "소나기 🌧️",
+      85: "눈보라 ❄️", 86: "눈보라 ❄️", 95: "뇌우 ⛈️", 96: "뇌우 ⛈️", 99: "뇌우 ⛈️",
+    };
+
     const fetchWeather = async () => {
+      if (document.hidden) return;
       try {
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${region.lat}&longitude=${region.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia/Seoul`;
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: controller.signal });
         const body = await res.json();
         const current = body.current;
         const temp = Math.round(current.temperature_2m ?? 0);
         const code = current.weather_code ?? 0;
-        const descMap: Record<number, string> = {
-          0: "맑음 ☀️", 1: "구름 조금 🌤️", 2: "구름 조금 🌤️", 3: "흐림 ☁️",
-          45: "안개 🌫️", 48: "안개 🌫️", 51: "이슬비 🌦️", 53: "이슬비 🌦️", 55: "이슬비 🌦️",
-          61: "비 🌧️", 63: "비 🌧️", 65: "비 🌧️", 66: "눈비 🌨️", 67: "눈비 🌨️",
-          71: "눈 ❄️", 73: "눈 ❄️", 75: "눈 ❄️", 77: "눈 ❄️",
-          80: "소나기 🌧️", 81: "소나기 🌧️", 82: "소나기 🌧️",
-          85: "눈보라 ❄️", 86: "눈보라 ❄️", 95: "뇌우 ⛈️", 96: "뇌우 ⛈️", 99: "뇌우 ⛈️",
-        };
         setWeather({ temp: `${temp}°C`, desc: descMap[code] || "알 수 없음" });
-      } catch { /* ignore */ }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          /* network error: keep stale weather */
+        }
+      }
     };
+
+    const onVisibility = () => { if (!document.hidden) fetchWeather(); };
+
     fetchWeather();
-    const timer = setInterval(fetchWeather, 1800000);
-    return () => clearInterval(timer);
+    timer = window.setInterval(fetchWeather, 1800000);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      controller.abort();
+      if (timer !== undefined) clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [region]);
 
   const changeRegion = (name: string) => {
@@ -107,8 +125,7 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
     }
   };
 
-  const saveOrder = useCallback((order: MenuId[]) => {
-    setMenuOrder(order);
+  const persistOrder = useCallback((order: MenuId[]) => {
     localStorage.setItem("kanban-menu-order", JSON.stringify(order));
   }, []);
 
@@ -162,24 +179,28 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
         const newOrder = [...menuOrderRef.current];
         const [moved] = newOrder.splice(currentIdx, 1);
         newOrder.splice(i, 0, moved);
-        saveOrder(newOrder);
+        menuOrderRef.current = newOrder;
+        setMenuOrder(newOrder);
         setDragIdx(i);
         dragIdxRef.current = i;
         break;
       }
     }
-  }, [editing, saveOrder]);
+  }, [editing]);
 
   const handlePointerUp = useCallback(() => {
+    if (dragActive.current) {
+      persistOrder(menuOrderRef.current);
+    }
     setDragIdx(null);
     dragIdxRef.current = null;
     dragActive.current = false;
-  }, []);
+  }, [persistOrder]);
 
   const btnClass = "text-xs text-slate-400 hover:text-slate-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-md px-3 py-1.5 transition-colors";
 
   const menuLabels: Record<MenuId, string> = {
-    theme: theme === "dark" ? "☀️" : "🌙",
+    theme: theme === "dark" ? "☀️ 모드" : "🌙 모드",
     backup: "💾 백업",
     restore: "📂 복원",
     recurring: "🔁 반복",

@@ -37,7 +37,7 @@ export interface DbRecurringTask {
   id?: number;
   title: string;
   description: string;
-  priority: string;
+  priority: "urgent" | "high" | "normal" | "low";
   label: string;
   recurrence: "daily" | "weekly" | "monthly";
   day_of_week: number | null;

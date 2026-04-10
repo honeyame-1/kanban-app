@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
 import { PRIORITIES, LABELS, DAYS_OF_WEEK } from "../types";
-import type { RecurringTask } from "../types";
+import type { RecurringTask, Priority, Recurrence } from "../types";
 
 interface RecurringViewProps {
   onClose: () => void;
@@ -13,9 +13,9 @@ export function RecurringView({ onClose, onGenerated }: RecurringViewProps) {
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState<string>("normal");
+  const [priority, setPriority] = useState<Priority>("normal");
   const [label, setLabel] = useState("");
-  const [recurrence, setRecurrence] = useState<string>("weekly");
+  const [recurrence, setRecurrence] = useState<Recurrence>("weekly");
   const [dayOfWeek, setDayOfWeek] = useState<number>(3); // 목요일
   const [dayOfMonth, setDayOfMonth] = useState<number>(1);
   const [autoDueDays, setAutoDueDays] = useState<number>(0);
@@ -123,7 +123,7 @@ export function RecurringView({ onClose, onGenerated }: RecurringViewProps) {
                 className="w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none mb-2" />
 
               <div className="flex gap-2 mb-2">
-                <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)}
+                <select value={recurrence} onChange={(e) => setRecurrence(e.target.value as Recurrence)}
                   className="bg-white/[0.06] border border-white/[0.1] rounded-md px-3 py-2 text-xs text-slate-300 outline-none">
                   <option value="daily">매일</option>
                   <option value="weekly">매주</option>
@@ -146,7 +146,7 @@ export function RecurringView({ onClose, onGenerated }: RecurringViewProps) {
               </div>
 
               <div className="flex gap-2 mb-2">
-                <select value={priority} onChange={(e) => setPriority(e.target.value)}
+                <select value={priority} onChange={(e) => setPriority(e.target.value as Priority)}
                   className="bg-white/[0.06] border border-white/[0.1] rounded-md px-3 py-2 text-xs text-slate-300 outline-none">
                   {PRIORITIES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
                 </select>
