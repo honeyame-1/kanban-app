@@ -9,6 +9,7 @@ import type {
   Attachment,
   RecurringTask,
   CreateRecurringInput,
+  ChecklistTemplate,
   Status,
   Priority,
   Recurrence,
@@ -66,9 +67,21 @@ const UNSAFE_OPEN_MIMES = [
   "application/javascript",
   "text/javascript",
 ];
+// File types that browsers cannot render inline — opening via blob: URL just
+// triggers a download with the random blob UUID as the filename. Force the
+// download path so the original filename is preserved via <a download>.
+const NON_RENDERABLE_EXTENSIONS = new Set([
+  "hwp", "hwpx", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+  "zip", "rar", "7z", "tar", "gz",
+  "exe", "msi", "dmg", "apk",
+  "mp3", "wav", "flac", "ogg",
+  "mp4", "avi", "mkv", "mov",
+]);
+
 function isUnsafeForInlineOpen(fileName: string, fileType: string): boolean {
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   if (UNSAFE_OPEN_EXTENSIONS.has(ext)) return true;
+  if (NON_RENDERABLE_EXTENSIONS.has(ext)) return true;
   const mime = (fileType || "").toLowerCase();
   return UNSAFE_OPEN_MIMES.some((m) => mime.startsWith(m));
 }
@@ -574,6 +587,54 @@ export const api = {
     }
 
     return count;
+  },
+
+  // ── Checklist Templates ──────────────────────────────────────────
+  getChecklistTemplates: async (): Promise<ChecklistTemplate[]> => {
+    const rows = await db.checklist_templates.orderBy("id").toArray();
+    return rows.map((r) => ({
+      id: r.id!,
+      name: r.name,
+      items: (() => { try { return JSON.parse(r.items) as string[]; } catch { return []; } })(),
+      created_at: r.created_at,
+    }));
+  },
+
+  addChecklistTemplate: async (name: string, items: string[]): Promise<ChecklistTemplate> => {
+    const now = new Date().toISOString();
+    const id = await db.checklist_templates.add({
+      name,
+      items: JSON.stringify(items),
+      created_at: now,
+    });
+    return { id: id as number, name, items, created_at: now };
+  },
+
+  updateChecklistTemplate: async (id: number, name: string, items: string[]): Promise<void> => {
+    await db.checklist_templates.update(id, { name, items: JSON.stringify(items) });
+  },
+
+  deleteChecklistTemplate: async (id: number): Promise<void> => {
+    await db.checklist_templates.delete(id);
+  },
+
+  applyChecklistTemplate: async (taskId: number, templateId: number): Promise<ChecklistItem[]> => {
+    const tpl = await db.checklist_templates.get(templateId);
+    if (!tpl) return [];
+    let items: string[];
+    try { items = JSON.parse(tpl.items) as string[]; } catch { return []; }
+    const existing = await db.checklist_items.where("task_id").equals(taskId).count();
+    const newItems: ChecklistItem[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const id = await db.checklist_items.add({
+        task_id: taskId,
+        text: items[i],
+        checked: 0,
+        position: existing + i,
+      });
+      newItems.push({ id: id as number, task_id: taskId, text: items[i], checked: false, position: existing + i });
+    }
+    return newItems;
   },
 };
 

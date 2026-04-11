@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { PRIORITIES, LABELS } from "../types";
-import type { Priority, ChecklistItem, Attachment } from "../types";
+import type { Priority, ChecklistItem, Attachment, ChecklistTemplate } from "../types";
 import { api } from "../api";
 
 interface TaskModalProps {
@@ -20,6 +20,8 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
   const [checkItems, setCheckItems] = useState<ChecklistItem[]>([]);
   const [newItemText, setNewItemText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
+  const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -32,8 +34,18 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
     api.getAttachments(taskId).then((items) => {
       if (!cancelled) setAttachments(items);
     });
+    api.getChecklistTemplates().then((tpls) => {
+      if (!cancelled) setTemplates(tpls);
+    });
     return () => { cancelled = true; };
   }, [task]);
+
+  const applyTemplate = async (tplId: number) => {
+    if (!task || task.id === undefined) return;
+    const newItems = await api.applyChecklistTemplate(task.id, tplId);
+    setCheckItems((prev) => [...prev, ...newItems]);
+    setShowTemplateMenu(false);
+  };
 
   const getFileIcon = (fileName: string) => {
     const ext = fileName.split(".").pop()?.toLowerCase() || "";
@@ -62,6 +74,62 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
     e.target.value = "";
   };
 
+  const [dragging, setDragging] = useState(false);
+  const dragCounter = useRef(0);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // 브라우저 기본 동작(파일 열기/새로고침) 차단 — 네이티브 이벤트로 처리
+  useEffect(() => {
+    const prevent = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
+    window.addEventListener("dragover", prevent);
+    window.addEventListener("drop", prevent);
+    return () => {
+      window.removeEventListener("dragover", prevent);
+      window.removeEventListener("drop", prevent);
+    };
+  }, []);
+
+  // 폼 영역 드롭 시 파일 첨부
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const taskId = task?.id;
+
+    const onEnter = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current++;
+      if (e.dataTransfer?.types.includes("Files")) setDragging(true);
+    };
+    const onLeave = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current--;
+      if (dragCounter.current === 0) setDragging(false);
+    };
+    const onOver = (e: DragEvent) => { e.preventDefault(); };
+    const onDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      setDragging(false);
+      dragCounter.current = 0;
+      const files = e.dataTransfer?.files;
+      if (!files || files.length === 0 || taskId === undefined) return;
+      for (const file of Array.from(files)) {
+        const att = await api.addAttachment(taskId, file.name, file, file.type);
+        setAttachments((prev) => [...prev, att]);
+      }
+    };
+
+    form.addEventListener("dragenter", onEnter);
+    form.addEventListener("dragleave", onLeave);
+    form.addEventListener("dragover", onOver);
+    form.addEventListener("drop", onDrop);
+    return () => {
+      form.removeEventListener("dragenter", onEnter);
+      form.removeEventListener("dragleave", onLeave);
+      form.removeEventListener("dragover", onOver);
+      form.removeEventListener("drop", onDrop);
+    };
+  }, [task]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -79,6 +147,7 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <form
+        ref={formRef}
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
         className="glass rounded-xl p-6 w-[460px] max-w-[92vw] max-h-[90vh] overflow-y-auto"
@@ -181,7 +250,39 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
 
         {task && task.id !== undefined && (
           <div className="mb-4">
-            <label className="block text-xs text-slate-400 mb-2">체크리스트</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs text-slate-400">체크리스트</label>
+              {templates.length > 0 && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplateMenu(!showTemplateMenu)}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
+                  >
+                    <span>📋</span>
+                    <span>템플릿</span>
+                  </button>
+                  {showTemplateMenu && (
+                    <>
+                      <div className="fixed inset-0 z-[9]" onClick={() => setShowTemplateMenu(false)} />
+                      <div className="absolute right-0 top-full mt-1 bg-[#1e1e2e] border border-white/[0.1] rounded-lg shadow-xl z-10 min-w-[160px] py-1">
+                        {templates.map((tpl) => (
+                          <button
+                            key={tpl.id}
+                            type="button"
+                            onClick={() => applyTemplate(tpl.id)}
+                            className="w-full text-left text-xs text-slate-300 hover:bg-white/[0.06] px-3 py-2 transition-colors"
+                          >
+                            {tpl.name}
+                            <span className="text-slate-600 ml-1">({tpl.items.length})</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="space-y-1">
               {checkItems.map(item => (
                 <div key={item.id} className="flex items-center gap-2 group px-2 py-1 rounded hover:bg-white/[0.03] transition-colors">
@@ -270,9 +371,16 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
                 ))}
               </div>
             )}
-            {attachments.length === 0 && (
-              <p className="text-xs text-slate-600 px-2">첨부된 파일이 없습니다</p>
-            )}
+            <div
+              onClick={handleAttach}
+              className={`mt-2 border border-dashed rounded-lg px-3 py-3 text-center text-xs cursor-pointer transition-colors ${
+                dragging
+                  ? "border-indigo-400 bg-indigo-500/10 text-indigo-300"
+                  : "border-white/[0.1] text-slate-600 hover:border-white/[0.2] hover:text-slate-500"
+              }`}
+            >
+              {dragging ? "여기에 놓으세요" : "파일을 드래그하거나 클릭하여 첨부"}
+            </div>
           </div>
         )}
 

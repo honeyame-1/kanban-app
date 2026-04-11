@@ -4,6 +4,7 @@ interface TitleBarProps {
   onArchiveClick: () => void;
   onStatsClick: () => void;
   onRecurringClick: () => void;
+  onTemplateClick: () => void;
   theme: string;
   onToggleTheme: () => void;
   onBackup: () => void;
@@ -22,8 +23,8 @@ function formatDateTime(date: Date): string {
   return `${y}년 ${m}월 ${d}일 (${day})  ${h}:${min}`;
 }
 
-type MenuId = "theme" | "backup" | "restore" | "recurring" | "stats" | "archive";
-const DEFAULT_ORDER: MenuId[] = ["theme", "backup", "restore", "recurring", "stats", "archive"];
+type MenuId = "theme" | "backup" | "restore" | "recurring" | "templates" | "stats" | "archive";
+const DEFAULT_ORDER: MenuId[] = ["theme", "backup", "restore", "recurring", "templates", "stats", "archive"];
 
 function loadOrder(): MenuId[] {
   try {
@@ -60,7 +61,7 @@ function loadRegion(): { name: string; lat: number; lon: number } {
   return REGIONS[0]; // 인천 기본
 }
 
-export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme, onToggleTheme, onBackup, onRestore }: TitleBarProps) {
+export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, onTemplateClick, theme, onToggleTheme, onBackup, onRestore }: TitleBarProps) {
   const [now, setNow] = useState(new Date());
   const [menuOrder, setMenuOrder] = useState<MenuId[]>(loadOrder);
   const [editing, setEditing] = useState(false);
@@ -204,6 +205,7 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
     backup: "💾 백업",
     restore: "📂 복원",
     recurring: "🔁 반복",
+    templates: "📋 템플릿",
     stats: "📊 통계",
     archive: "📦 아카이브",
   };
@@ -213,6 +215,7 @@ export function TitleBar({ onArchiveClick, onStatsClick, onRecurringClick, theme
     backup: onBackup,
     restore: handleRestoreClick,
     recurring: onRecurringClick,
+    templates: onTemplateClick,
     stats: onStatsClick,
     archive: onArchiveClick,
   };

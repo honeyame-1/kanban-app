@@ -33,6 +33,13 @@ export interface DbAttachment {
   created_at: string;
 }
 
+export interface DbChecklistTemplate {
+  id?: number;
+  name: string;
+  items: string; // JSON stringified string[]
+  created_at: string;
+}
+
 export interface DbRecurringTask {
   id?: number;
   title: string;
@@ -52,6 +59,7 @@ const db = new Dexie("kanban-app") as Dexie & {
   checklist_items: EntityTable<DbChecklistItem, "id">;
   attachments: EntityTable<DbAttachment, "id">;
   recurring_tasks: EntityTable<DbRecurringTask, "id">;
+  checklist_templates: EntityTable<DbChecklistTemplate, "id">;
 };
 
 db.version(1).stores({
@@ -59,6 +67,14 @@ db.version(1).stores({
   checklist_items: "++id, task_id",
   attachments: "++id, task_id",
   recurring_tasks: "++id, enabled",
+});
+
+db.version(2).stores({
+  tasks: "++id, status, archived, priority, label, due_date",
+  checklist_items: "++id, task_id",
+  attachments: "++id, task_id",
+  recurring_tasks: "++id, enabled",
+  checklist_templates: "++id",
 });
 
 export { db };
