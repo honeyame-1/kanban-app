@@ -73,13 +73,16 @@ function isUnsafeForInlineOpen(fileName: string, fileType: string): boolean {
   return UNSAFE_OPEN_MIMES.some((m) => mime.startsWith(m));
 }
 
+const VALID_STATUSES: Set<string> = new Set(["todo", "in_progress", "submitted"]);
+const VALID_PRIORITIES: Set<string> = new Set(["urgent", "high", "normal", "low"]);
+
 function isValidTaskRow(t: unknown): t is Record<string, unknown> {
   if (!t || typeof t !== "object") return false;
   const o = t as Record<string, unknown>;
   return (
     typeof o.title === "string" &&
-    typeof o.status === "string" &&
-    typeof o.priority === "string" &&
+    typeof o.status === "string" && VALID_STATUSES.has(o.status as string) &&
+    typeof o.priority === "string" && VALID_PRIORITIES.has(o.priority as string) &&
     typeof o.position === "number"
   );
 }
