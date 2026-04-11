@@ -40,7 +40,7 @@ export function ArchiveView({ tasks, onRestore, onDelete, onClose }: ArchiveView
                       복원
                     </button>
                     <button
-                      onClick={() => onDelete(task.id)}
+                      onClick={() => { if (confirm("이 카드를 영구 삭제하시겠습니까? 첨부파일도 함께 삭제됩니다.")) onDelete(task.id); }}
                       className="text-xs text-red-400 hover:text-red-300 bg-red-500/10 rounded px-2 py-1"
                     >
                       삭제

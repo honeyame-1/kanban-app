@@ -68,8 +68,12 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
     if (taskId === undefined) return;
 
     for (const file of Array.from(files)) {
-      const att = await api.addAttachment(taskId, file.name, file, file.type);
-      setAttachments((prev) => [...prev, att]);
+      try {
+        const att = await api.addAttachment(taskId, file.name, file, file.type);
+        setAttachments((prev) => [...prev, att]);
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "파일 첨부 실패");
+      }
     }
     e.target.value = "";
   };
@@ -113,8 +117,12 @@ export function TaskModal({ task, onSave, onClose }: TaskModalProps) {
       const files = e.dataTransfer?.files;
       if (!files || files.length === 0 || taskId === undefined) return;
       for (const file of Array.from(files)) {
-        const att = await api.addAttachment(taskId, file.name, file, file.type);
-        setAttachments((prev) => [...prev, att]);
+        try {
+          const att = await api.addAttachment(taskId, file.name, file, file.type);
+          setAttachments((prev) => [...prev, att]);
+        } catch (err) {
+          alert(err instanceof Error ? err.message : "파일 첨부 실패");
+        }
       }
     };
 

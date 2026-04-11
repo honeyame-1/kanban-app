@@ -53,38 +53,24 @@ async function shiftTodoPositions(): Promise<void> {
   );
 }
 
-// File types that can execute scripts when opened via blob: URL — those would
-// run against this app's origin and read its IndexedDB. Open via download only.
-const UNSAFE_OPEN_EXTENSIONS = new Set([
-  "html", "htm", "xhtml", "xml", "svg", "svgz", "js", "mjs", "mhtml",
+// Allowlist: only these types are safe to open inline via blob: URL.
+// Everything else is force-downloaded to prevent XSS via extension/MIME spoofing.
+const SAFE_INLINE_EXTENSIONS = new Set([
+  "pdf", "png", "jpg", "jpeg", "gif", "webp", "bmp", "txt",
 ]);
-const UNSAFE_OPEN_MIMES = [
-  "text/html",
-  "application/xhtml",
-  "application/xml",
-  "text/xml",
-  "image/svg",
-  "application/javascript",
-  "text/javascript",
-];
-// File types that browsers cannot render inline — opening via blob: URL just
-// triggers a download with the random blob UUID as the filename. Force the
-// download path so the original filename is preserved via <a download>.
-const NON_RENDERABLE_EXTENSIONS = new Set([
-  "hwp", "hwpx", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-  "zip", "rar", "7z", "tar", "gz",
-  "exe", "msi", "dmg", "apk",
-  "mp3", "wav", "flac", "ogg",
-  "mp4", "avi", "mkv", "mov",
+const SAFE_INLINE_MIMES = new Set([
+  "application/pdf",
+  "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp",
+  "text/plain",
 ]);
 
-function isUnsafeForInlineOpen(fileName: string, fileType: string): boolean {
+function isSafeForInlineOpen(fileName: string, fileType: string): boolean {
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
-  if (UNSAFE_OPEN_EXTENSIONS.has(ext)) return true;
-  if (NON_RENDERABLE_EXTENSIONS.has(ext)) return true;
   const mime = (fileType || "").toLowerCase();
-  return UNSAFE_OPEN_MIMES.some((m) => mime.startsWith(m));
+  return SAFE_INLINE_EXTENSIONS.has(ext) && SAFE_INLINE_MIMES.has(mime);
 }
+
+const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 50MB per file
 
 const VALID_STATUSES: Set<string> = new Set(["todo", "in_progress", "submitted"]);
 const VALID_PRIORITIES: Set<string> = new Set(["urgent", "high", "normal", "low"]);
@@ -331,9 +317,18 @@ export const api = {
       throw new Error("백업 파일 형식이 올바르지 않습니다.");
     }
     // Strip ids so Dexie autogenerates fresh ones (avoids collisions).
+    const ALLOWED_KEYS = new Set([
+      "title", "description", "status", "priority", "due_date",
+      "position", "archived", "created_at", "updated_at", "label",
+      "start_time", "end_time",
+    ]);
     const rows = parsed.map((t) => {
-      const { id: _id, ...rest } = t as Record<string, unknown>;
-      return rest;
+      const src = t as Record<string, unknown>;
+      const row: Record<string, unknown> = {};
+      for (const key of ALLOWED_KEYS) {
+        if (key in src) row[key] = src[key];
+      }
+      return row;
     });
 
     await db.transaction(
@@ -442,6 +437,11 @@ export const api = {
     fileData: Blob,
     fileType: string
   ): Promise<Attachment> => {
+    if (fileData.size > MAX_ATTACHMENT_SIZE) {
+      throw new Error(`파일 크기가 50MB를 초과합니다: ${fileName}`);
+    }
+    // 파일�� 제어문자 제거, 255자 제한
+    fileName = fileName.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 255);
     const id = await db.attachments.add({
       task_id: taskId,
       file_name: fileName,
@@ -466,17 +466,16 @@ export const api = {
   openAttachment: async (id: number): Promise<void> => {
     const att = await db.attachments.get(id);
     if (!att) return;
-    // Blob URLs inherit the parent origin, so opening HTML/SVG/XML in a new
-    // tab would execute scripts against this app's IndexedDB. Force download
-    // for those types instead of window.open.
-    if (isUnsafeForInlineOpen(att.file_name, att.file_type)) {
+    // Only open safe types inline; everything else is force-downloaded
+    // to prevent XSS via blob: URL on this origin.
+    if (!isSafeForInlineOpen(att.file_name, att.file_type)) {
       await api.downloadAttachment(id);
       return;
     }
     const blob = new Blob([att.file_data], { type: att.file_type || "application/octet-stream" });
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
   },
 
   downloadAttachment: async (id: number): Promise<void> => {
@@ -490,7 +489,7 @@ export const api = {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
   },
 
   getRecurringTasks: async (): Promise<RecurringTask[]> => {
